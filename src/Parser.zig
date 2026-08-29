@@ -155,8 +155,14 @@ pub fn parse(
     const target = path.items[path.items.len - 1];
     const definitions = target.arguments();
 
-    for (definitions[argument_index..]) |definition| {
-        if (definition.required) return error.MissingArgument;
+    for (definitions) |definition| {
+        if (!definition.required) continue;
+
+        for (parsed_arguments.items) |parsed_argument| {
+            if (parsed_argument.definition == &definition) break;
+        } else {
+            return error.MissingArgument;
+        }
     }
 
     return .{
@@ -948,4 +954,33 @@ test "remaining argument must be last" {
     };
 
     try std.testing.expectError(error.RemainingArgumentNotLast, cli.validate());
+}
+
+
+test "required remaining arguments are satisfied by parsed values" {
+    const cli = CLI{
+        .name = "app",
+        .arguments = &.{.{ .name = "files", .kind = .remaining }},
+    };
+
+    var invocation = try parse(
+        std.testing.allocator,
+        &cli,
+        &.{ "a.txt", "b.txt" },
+    );
+    defer invocation.deinit(std.testing.allocator);
+
+    try std.testing.expectEqual(@as(usize, 2), invocation.arguments.len);
+}
+
+test "required remaining arguments cannot be omitted" {
+    const cli = CLI{
+        .name = "app",
+        .arguments = &.{.{ .name = "files", .kind = .remaining }},
+    };
+
+    try std.testing.expectError(
+        error.MissingArgument,
+        parse(std.testing.allocator, &cli, &.{}),
+    );
 }

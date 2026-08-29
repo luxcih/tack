@@ -93,10 +93,18 @@ pub fn option_value(self: *const Invocation, name: []const u8) ?[]const u8 {
         };
     }
 
-    for (self.target.options()) |definition| {
-        if (definition.long) |long| {
-            if (std.mem.eql(u8, long, name)) {
-                return definition.default;
+    var path_index = self.path.len;
+    while (path_index > 0) {
+        path_index -= 1;
+        const target = self.path[path_index];
+
+        for (target.options()) |definition| {
+            if (path_index + 1 < self.path.len and !definition.persistent) continue;
+
+            if (definition.long) |long| {
+                if (std.mem.eql(u8, long, name)) {
+                    return definition.default;
+                }
             }
         }
     }
@@ -138,3 +146,34 @@ pub const Option = struct {
         value: []const u8,
     };
 };
+
+
+test "persistent option defaults are inherited" {
+    const Parser = @import("Parser.zig");
+
+    const cli = CLI{
+        .name = "app",
+        .options = &.{.{
+            .long = "format",
+            .kind = .value,
+            .default = "text",
+            .persistent = true,
+        }},
+        .commands = &.{.{
+            .name = "config",
+            .commands = &.{.{ .name = "set" }},
+        }},
+    };
+
+    var invocation = try Parser.parse(
+        std.testing.allocator,
+        &cli,
+        &.{ "config", "set" },
+    );
+    defer invocation.deinit(std.testing.allocator);
+
+    try std.testing.expectEqualStrings(
+        "text",
+        invocation.option_value("format").?,
+    );
+}
