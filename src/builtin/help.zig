@@ -25,6 +25,9 @@ pub fn action(invocation: *const Invocation) !Action.Result {
 }
 
 pub fn render(invocation: *const Invocation) !void {
+    const allocator = std.heap.page_allocator;
+    const visible_options = try invocation.visible_options(allocator);
+    defer allocator.free(visible_options);
     const target = invocation.getTarget();
 
     std.debug.print("Usage: ", .{});
@@ -41,7 +44,7 @@ pub fn render(invocation: *const Invocation) !void {
         std.debug.print(" [arguments]", .{});
     }
 
-    if (target.options().len > 0) {
+    if (visible_options.len > 0) {
         std.debug.print(" [options]", .{});
     }
 
@@ -58,9 +61,10 @@ pub fn render(invocation: *const Invocation) !void {
         }
     }
 
-    if (target.options().len > 0) {
+    if (visible_options.len > 0) {
         std.debug.print("\nOptions:\n", .{});
-        for (target.options()) |option_definition| {
+        for (visible_options) |option_pointer| {
+            const option_definition = option_pointer;
             std.debug.print("  ", .{});
             if (option_definition.short) |short| {
                 std.debug.print("-{c}", .{short});

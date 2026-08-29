@@ -21,6 +21,20 @@ pub fn getPath(self: *const Invocation) []const Target {
     return self.path;
 }
 
+pub fn visible_options(self: *const Invocation, allocator: std.mem.Allocator) ![]const *const Command.Option {
+    var options = std.ArrayList(*const Command.Option).empty;
+    errdefer options.deinit(allocator);
+
+    for (self.path, 0..) |target, index| {
+        for (target.options()) |*option| {
+            if (index + 1 < self.path.len and !option.persistent) continue;
+            try options.append(allocator, option);
+        }
+    }
+
+    return options.toOwnedSlice(allocator);
+}
+
 pub fn deinit(self: *Invocation, allocator: std.mem.Allocator) void {
     allocator.free(self.path);
     allocator.free(self.arguments);
