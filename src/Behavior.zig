@@ -12,6 +12,6 @@ handle: *const fn (
 ) anyerror!Result,
 
 pub const Result = enum {
-    continue,
+    proceed,
     handled,
 };
