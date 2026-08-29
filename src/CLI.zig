@@ -34,7 +34,6 @@ pub fn validate(self: *const CLI) ValidationError!void {
         self.options,
         self.persistent_options,
         self.commands,
-        &.{},
     );
 }
 
@@ -43,16 +42,11 @@ fn validate_node(
     options: []const Command.Option,
     persistent_options: []const Command.Option,
     commands: []const Command,
-    inherited_options: []const Command.Option,
 ) ValidationError!void {
     try validate_arguments(arguments);
     try validate_options(options);
     try validate_options(persistent_options);
-
-    // Every option visible at this node must have a unique name.
     try validate_visible_options(options, persistent_options);
-    try validate_visible_options(options, inherited_options);
-    try validate_visible_options(persistent_options, inherited_options);
 
     for (commands, 0..) |command, index| {
         try validate_node(
@@ -60,6 +54,10 @@ fn validate_node(
             command.options,
             command.persistent_options,
             command.commands,
+        );
+
+        try validate_subtree_against_options(
+            command,
             persistent_options,
         );
 
@@ -72,6 +70,18 @@ fn validate_node(
                 return error.DuplicateCommandName;
             }
         }
+    }
+}
+
+fn validate_subtree_against_options(
+    command: Command,
+    ancestor_options: []const Command.Option,
+) ValidationError!void {
+    try validate_visible_options(command.options, ancestor_options);
+    try validate_visible_options(command.persistent_options, ancestor_options);
+
+    for (command.commands) |child| {
+        try validate_subtree_against_options(child, ancestor_options);
     }
 }
 
