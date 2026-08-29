@@ -52,6 +52,8 @@ pub fn run(
     allocator: std.mem.Allocator,
     args: []const []const u8,
 ) !void {
+    try self.validate();
+
     var invocation = try Parser.parse(allocator, self, args);
     defer invocation.deinit(allocator);
 
@@ -135,4 +137,17 @@ test "run parses and dispatches" {
 
     try cli.run(std.testing.allocator, &.{});
     try std.testing.expect(Test.called);
+}
+
+
+test "run validates before parsing" {
+    const cli = CLI{
+        .name = "app",
+        .options = &.{.{}},
+    };
+
+    try std.testing.expectError(
+        error.OptionHasNoName,
+        cli.run(std.testing.allocator, &.{}),
+    );
 }
