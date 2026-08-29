@@ -87,32 +87,48 @@ pub fn parse(
                 },
             }
         } else if (!options_ended and arg.len > 1 and arg[0] == '-') {
-            const option = findShortOption(options, arg[1]) orelse return error.UnknownOption;
+            const short_args = arg[1..];
+            var short_index: usize = 0;
+            var consumed_next = false;
 
-            if (arg.len != 2) {
-                return error.UnknownOption;
+            while (short_index < short_args.len) {
+                const short = short_args[short_index];
+                const option = findShortOption(options, short) orelse return error.UnknownOption;
+
+                switch (option.kind) {
+                    .flag => {
+                        try parsed_options.append(allocator, .{
+                            .definition = option,
+                            .value = .{ .flag = true },
+                        });
+
+                        short_index += 1;
+                    },
+                    .value => {
+                        const attached_value = short_args[short_index + 1 ..];
+
+                        const value = if (attached_value.len > 0)
+                            attached_value
+                        else blk: {
+                            if (index + 1 >= args.len) {
+                                return error.MissingOptionValue;
+                            }
+
+                            consumed_next = true;
+                            break :blk args[index + 1];
+                        };
+
+                        try parsed_options.append(allocator, .{
+                            .definition = option,
+                            .value = .{ .value = value },
+                        });
+
+                        break;
+                    },
+                }
             }
 
-            switch (option.kind) {
-                .flag => {
-                    try parsed_options.append(allocator, .{
-                        .definition = option,
-                        .value = .{ .flag = true },
-                    });
-                    index += 1;
-                },
-                .value => {
-                    if (index + 1 >= args.len) {
-                        return error.MissingOptionValue;
-                    }
-
-                    try parsed_options.append(allocator, .{
-                        .definition = option,
-                        .value = .{ .value = args[index + 1] },
-                    });
-                    index += 2;
-                },
-            }
+            index += if (consumed_next) 2 else 1;
         } else {
             if (argument_index >= definitions.len) {
                 return error.UnexpectedArgument;
@@ -576,4 +592,67 @@ test "rejects inline values for flags" {
         error.UnexpectedOptionValue,
         parse(std.testing.allocator, &cli, &.{"--force=true"}),
     );
+}
+
+
+test "parses combined short flags" {
+    const cli = CLI{
+        .name = "app",
+        .options = &.{
+            .{ .long = "all", .short = 'a' },
+            .{ .long = "brief", .short = 'b' },
+            .{ .long = "count", .short = 'c' },
+        },
+    };
+
+    var invocation = try parse(
+        std.testing.allocator,
+        &cli,
+        &.{"-abc"},
+    );
+    defer invocation.deinit(std.testing.allocator);
+
+    try std.testing.expect(invocation.hasOption("all"));
+    try std.testing.expect(invocation.hasOption("brief"));
+    try std.testing.expect(invocation.hasOption("count"));
+}
+
+test "allows a value option at the end of a short group" {
+    const cli = CLI{
+        .name = "app",
+        .options = &.{
+            .{ .long = "verbose", .short = 'v' },
+            .{ .long = "output", .short = 'o', .kind = .value },
+        },
+    };
+
+    var invocation = try parse(
+        std.testing.allocator,
+        &cli,
+        &.{ "-vo", "file.txt" },
+    );
+    defer invocation.deinit(std.testing.allocator);
+
+    try std.testing.expect(invocation.hasOption("verbose"));
+    try std.testing.expectEqualStrings("file.txt", invocation.optionValue("output").?);
+}
+
+test "allows an attached value in a short option group" {
+    const cli = CLI{
+        .name = "app",
+        .options = &.{
+            .{ .long = "verbose", .short = 'v' },
+            .{ .long = "output", .short = 'o', .kind = .value },
+        },
+    };
+
+    var invocation = try parse(
+        std.testing.allocator,
+        &cli,
+        &.{"-vofile.txt"},
+    );
+    defer invocation.deinit(std.testing.allocator);
+
+    try std.testing.expect(invocation.hasOption("verbose"));
+    try std.testing.expectEqualStrings("file.txt", invocation.optionValue("output").?);
 }
