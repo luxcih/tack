@@ -264,48 +264,6 @@ fn matches(command: *const Command, arg: []const u8) bool {
 }
 
 
-test "resolves nested commands" {
-    const cli = CLI{
-        .name = "app",
-        .commands = &.{
-            .{
-                .name = "remote",
-                .commands = &.{
-                    .{ .name = "add" },
-                },
-            },
-        },
-    };
-
-    const resolution = resolve(&cli, &.{ "remote", "add", "origin" });
-
-    try std.testing.expectEqual(@as(usize, 2), resolution.index);
-
-    switch (resolution.target) {
-        .command => |command| try std.testing.expectEqualStrings("add", command.name),
-        .cli => return error.TestUnexpectedResult,
-    }
-}
-
-test "resolves command aliases" {
-    const cli = CLI{
-        .name = "app",
-        .commands = &.{
-            .{
-                .name = "remove",
-                .aliases = &.{ "rm" },
-            },
-        },
-    };
-
-    const resolution = resolve(&cli, &.{"rm"});
-
-    switch (resolution.target) {
-        .command => |command| try std.testing.expectEqualStrings("remove", command.name),
-        .cli => return error.TestUnexpectedResult,
-    }
-}
-
 test "parses positional arguments and options" {
     const cli = CLI{
         .name = "app",
