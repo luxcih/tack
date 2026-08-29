@@ -107,8 +107,10 @@ pub fn parse(
         }
     }
 
-    if (argument_index < definitions.len) {
-        return error.MissingArgument;
+    for (definitions[argument_index..]) |definition| {
+        if (definition.required) {
+            return error.MissingArgument;
+        }
     }
 
     return .{
@@ -376,4 +378,40 @@ test "provides convenient option helpers" {
     try std.testing.expect(invocation.optionValue("force") == null);
     try std.testing.expectEqualStrings("result.txt", invocation.optionValue("output").?);
     try std.testing.expect(invocation.optionValue("missing") == null);
+}
+
+
+test "allows optional arguments to be omitted" {
+    const cli = CLI{
+        .name = "app",
+        .arguments = &.{
+            .{ .name = "file" },
+            .{ .name = "destination", .required = false },
+        },
+    };
+
+    var invocation = try parse(
+        std.testing.allocator,
+        &cli,
+        &.{"input.txt"},
+    );
+    defer invocation.deinit(std.testing.allocator);
+
+    try std.testing.expectEqualStrings("input.txt", invocation.argument("file").?);
+    try std.testing.expect(invocation.argument("destination") == null);
+}
+
+test "still requires required arguments" {
+    const cli = CLI{
+        .name = "app",
+        .arguments = &.{
+            .{ .name = "file" },
+            .{ .name = "destination", .required = false },
+        },
+    };
+
+    try std.testing.expectError(
+        error.MissingArgument,
+        parse(std.testing.allocator, &cli, &.{}),
+    );
 }
