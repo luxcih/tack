@@ -2,6 +2,7 @@ const std = @import("std");
 
 const Action = @import("Action.zig");
 const Command = @import("Command.zig");
+const Behavior = @import("Behavior.zig");
 const Invocation = @import("Invocation.zig");
 const Parser = @import("Parser.zig");
 
@@ -13,6 +14,7 @@ description: ?[]const u8 = null,
 arguments: []const Command.Argument = &.{},
 options: []const Command.Option = &.{},
 commands: []const Command = &.{},
+behaviors: []const Behavior = &.{},
 
 action: ?Action = null,
 
