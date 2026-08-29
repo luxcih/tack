@@ -175,17 +175,39 @@ pub fn run(
     allocator: std.mem.Allocator,
     args: []const []const u8,
 ) !void {
-    try self.validate();
-
-    var invocation = try Parser.parse(allocator, self, args);
-    defer invocation.deinit(allocator);
-
-    var context = Context{
+    return self.runWithContext(.{
         .allocator = allocator,
         .cli = self,
-    };
+    }, args);
+}
 
-    if (try self.runBehaviors(&context, &invocation)) {
+pub fn runWithWriter(
+    self: *const CLI,
+    allocator: std.mem.Allocator,
+    writer: *std.Io.Writer,
+    args: []const []const u8,
+) !void {
+    return self.runWithContext(.{
+        .allocator = allocator,
+        .cli = self,
+        .output = writer,
+    }, args);
+}
+
+pub fn runWithContext(
+    self: *const CLI,
+    context: Context,
+    args: []const []const u8,
+) !void {
+    try self.validate();
+
+    var invocation = try Parser.parse(context.allocator, self, args);
+    defer invocation.deinit(context.allocator);
+
+    var runtime_context = context;
+    runtime_context.cli = self;
+
+    if (try self.runBehaviors(&runtime_context, &invocation)) {
         return;
     }
 
