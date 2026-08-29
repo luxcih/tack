@@ -40,18 +40,18 @@ pub fn option(self: *const Invocation, name: []const u8) ?Option.Value {
 
 
 pub fn hasOption(self: *const Invocation, name: []const u8) bool {
-    const option = self.option(name) orelse return false;
+    const parsed_option = self.option(name) orelse return false;
 
-    return switch (option) {
+    return switch (parsed_option) {
         .flag => |value| value,
         .value => true,
     };
 }
 
 pub fn optionValue(self: *const Invocation, name: []const u8) ?[]const u8 {
-    const option = self.option(name) orelse return null;
+    const parsed_option = self.option(name) orelse return null;
 
-    return switch (option) {
+    return switch (parsed_option) {
         .flag => null,
         .value => |value| value,
     };
