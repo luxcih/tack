@@ -14,6 +14,7 @@ pub const Resolution = struct {
 pub const Error = error{
     UnknownOption,
     MissingOptionValue,
+    UnexpectedOptionValue,
     UnexpectedArgument,
     MissingArgument,
 };
@@ -46,11 +47,22 @@ pub fn parse(
             options_ended = true;
             index += 1;
         } else if (!options_ended and std.mem.startsWith(u8, arg, "--")) {
-            const name = arg[2..];
+            const option_arg = arg[2..];
+            const name_end = std.mem.indexOfScalar(u8, option_arg, '=') orelse option_arg.len;
+            const name = option_arg[0..name_end];
+            const inline_value = if (name_end < option_arg.len)
+                option_arg[name_end + 1 ..]
+            else
+                null;
+
             const option = findLongOption(options, name) orelse return error.UnknownOption;
 
             switch (option.kind) {
                 .flag => {
+                    if (inline_value != null) {
+                        return error.UnexpectedOptionValue;
+                    }
+
                     try parsed_options.append(allocator, .{
                         .definition = option,
                         .value = .{ .flag = true },
@@ -58,15 +70,20 @@ pub fn parse(
                     index += 1;
                 },
                 .value => {
-                    if (index + 1 >= args.len) {
-                        return error.MissingOptionValue;
-                    }
+                    const value = inline_value orelse blk: {
+                        if (index + 1 >= args.len) {
+                            return error.MissingOptionValue;
+                        }
+
+                        index += 1;
+                        break :blk args[index];
+                    };
 
                     try parsed_options.append(allocator, .{
                         .definition = option,
-                        .value = .{ .value = args[index + 1] },
+                        .value = .{ .value = value },
                     });
-                    index += 2;
+                    index += 1;
                 },
             }
         } else if (!options_ended and arg.len > 1 and arg[0] == '-') {
@@ -508,4 +525,55 @@ test "continues parsing positional arguments after double dash" {
 
     try std.testing.expectEqualStrings("one", invocation.argument("first").?);
     try std.testing.expectEqualStrings("-two", invocation.argument("second").?);
+}
+
+
+test "parses inline long option values" {
+    const cli = CLI{
+        .name = "app",
+        .options = &.{
+            .{ .long = "format", .kind = .value },
+        },
+    };
+
+    var invocation = try parse(
+        std.testing.allocator,
+        &cli,
+        &.{"--format=json"},
+    );
+    defer invocation.deinit(std.testing.allocator);
+
+    try std.testing.expectEqualStrings("json", invocation.optionValue("format").?);
+}
+
+test "allows equals signs inside inline option values" {
+    const cli = CLI{
+        .name = "app",
+        .options = &.{
+            .{ .long = "value", .kind = .value },
+        },
+    };
+
+    var invocation = try parse(
+        std.testing.allocator,
+        &cli,
+        &.{"--value=one=two"},
+    );
+    defer invocation.deinit(std.testing.allocator);
+
+    try std.testing.expectEqualStrings("one=two", invocation.optionValue("value").?);
+}
+
+test "rejects inline values for flags" {
+    const cli = CLI{
+        .name = "app",
+        .options = &.{
+            .{ .long = "force" },
+        },
+    };
+
+    try std.testing.expectError(
+        error.UnexpectedOptionValue,
+        parse(std.testing.allocator, &cli, &.{"--force=true"}),
+    );
 }
