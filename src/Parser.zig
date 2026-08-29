@@ -415,3 +415,50 @@ test "still requires required arguments" {
         parse(std.testing.allocator, &cli, &.{}),
     );
 }
+
+
+test "uses default option values without marking options present" {
+    const cli = CLI{
+        .name = "app",
+        .options = &.{
+            .{
+                .long = "format",
+                .kind = .value,
+                .default = "text",
+            },
+        },
+    };
+
+    var invocation = try parse(
+        std.testing.allocator,
+        &cli,
+        &.{},
+    );
+    defer invocation.deinit(std.testing.allocator);
+
+    try std.testing.expect(!invocation.hasOption("format"));
+    try std.testing.expectEqualStrings("text", invocation.optionValue("format").?);
+}
+
+test "explicit option values override defaults" {
+    const cli = CLI{
+        .name = "app",
+        .options = &.{
+            .{
+                .long = "format",
+                .kind = .value,
+                .default = "text",
+            },
+        },
+    };
+
+    var invocation = try parse(
+        std.testing.allocator,
+        &cli,
+        &.{ "--format", "json" },
+    );
+    defer invocation.deinit(std.testing.allocator);
+
+    try std.testing.expect(invocation.hasOption("format"));
+    try std.testing.expectEqualStrings("json", invocation.optionValue("format").?);
+}

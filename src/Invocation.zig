@@ -38,23 +38,27 @@ pub fn option(self: *const Invocation, name: []const u8) ?Option.Value {
     return null;
 }
 
-
 pub fn hasOption(self: *const Invocation, name: []const u8) bool {
-    const parsed_option = self.option(name) orelse return false;
-
-    return switch (parsed_option) {
-        .flag => |value| value,
-        .value => true,
-    };
+    return self.option(name) != null;
 }
 
 pub fn optionValue(self: *const Invocation, name: []const u8) ?[]const u8 {
-    const parsed_option = self.option(name) orelse return null;
+    if (self.option(name)) |parsed_option| {
+        return switch (parsed_option) {
+            .flag => null,
+            .value => |value| value,
+        };
+    }
 
-    return switch (parsed_option) {
-        .flag => null,
-        .value => |value| value,
-    };
+    for (self.target.options()) |definition| {
+        if (definition.long) |long| {
+            if (std.mem.eql(u8, long, name)) {
+                return definition.default;
+            }
+        }
+    }
+
+    return null;
 }
 
 pub const Target = union(enum) {

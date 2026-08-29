@@ -24,6 +24,7 @@ pub const Option = struct {
     short: ?u8 = null,
 
     kind: Kind = .flag,
+    default: ?[]const u8 = null,
 
     description: ?[]const u8 = null,
 
