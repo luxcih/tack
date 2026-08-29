@@ -1,6 +1,5 @@
 const std = @import("std");
 
-const Action = @import("Action.zig");
 const CLI = @import("CLI.zig");
 const Command = @import("Command.zig");
 
@@ -81,26 +80,6 @@ pub const Target = union(enum) {
         };
     }
 
-    pub fn persistent_options(self: Target) []const Command.Option {
-        return switch (self) {
-            .cli => |cli| cli.persistent_options,
-            .command => |command| command.persistent_options,
-        };
-    }
-
-    pub fn action(self: Target) ?Action {
-        return switch (self) {
-            .cli => |cli| cli.action,
-            .command => |command| command.action,
-        };
-    }
-
-    pub fn final_action(self: Target) ?Action {
-        return switch (self) {
-            .cli => |cli| cli.final_action,
-            .command => |command| command.final_action,
-        };
-    }
 };
 
 pub const Argument = struct {
