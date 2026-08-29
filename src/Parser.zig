@@ -11,6 +11,113 @@ pub const Resolution = struct {
     index: usize,
 };
 
+pub const Error = error{
+    UnknownOption,
+    MissingOptionValue,
+    UnexpectedArgument,
+    MissingArgument,
+};
+
+pub fn parse(
+    allocator: std.mem.Allocator,
+    cli: *const CLI,
+    args: []const []const u8,
+) !Invocation {
+    const resolution = resolve(cli, args);
+    const target = resolution.target;
+
+    var parsed_arguments = std.ArrayList(Invocation.Argument).empty;
+    errdefer parsed_arguments.deinit(allocator);
+
+    var parsed_options = std.ArrayList(Invocation.Option).empty;
+    errdefer parsed_options.deinit(allocator);
+
+    const definitions = target.arguments();
+    const options = target.options();
+
+    var index = resolution.index;
+    var argument_index: usize = 0;
+
+    while (index < args.len) {
+        const arg = args[index];
+
+        if (std.mem.startsWith(u8, arg, "--")) {
+            const name = arg[2..];
+            const option = findLongOption(options, name) orelse return error.UnknownOption;
+
+            switch (option.kind) {
+                .flag => {
+                    try parsed_options.append(allocator, .{
+                        .definition = option,
+                        .value = .{ .flag = true },
+                    });
+                    index += 1;
+                },
+                .value => {
+                    if (index + 1 >= args.len) {
+                        return error.MissingOptionValue;
+                    }
+
+                    try parsed_options.append(allocator, .{
+                        .definition = option,
+                        .value = .{ .value = args[index + 1] },
+                    });
+                    index += 2;
+                },
+            }
+        } else if (arg.len > 1 and arg[0] == '-') {
+            const option = findShortOption(options, arg[1]) orelse return error.UnknownOption;
+
+            if (arg.len != 2) {
+                return error.UnknownOption;
+            }
+
+            switch (option.kind) {
+                .flag => {
+                    try parsed_options.append(allocator, .{
+                        .definition = option,
+                        .value = .{ .flag = true },
+                    });
+                    index += 1;
+                },
+                .value => {
+                    if (index + 1 >= args.len) {
+                        return error.MissingOptionValue;
+                    }
+
+                    try parsed_options.append(allocator, .{
+                        .definition = option,
+                        .value = .{ .value = args[index + 1] },
+                    });
+                    index += 2;
+                },
+            }
+        } else {
+            if (argument_index >= definitions.len) {
+                return error.UnexpectedArgument;
+            }
+
+            try parsed_arguments.append(allocator, .{
+                .definition = &definitions[argument_index],
+                .value = arg,
+            });
+
+            argument_index += 1;
+            index += 1;
+        }
+    }
+
+    if (argument_index < definitions.len) {
+        return error.MissingArgument;
+    }
+
+    return .{
+        .target = target,
+        .arguments = try parsed_arguments.toOwnedSlice(allocator),
+        .options = try parsed_options.toOwnedSlice(allocator),
+    };
+}
+
 pub fn resolve(
     cli: *const CLI,
     args: []const []const u8,
@@ -40,6 +147,36 @@ fn findCommand(
     for (commands) |*command| {
         if (matches(command, arg)) {
             return command;
+        }
+    }
+
+    return null;
+}
+
+fn findLongOption(
+    options: []const Command.Option,
+    name: []const u8,
+) ?*const Command.Option {
+    for (options) |*option| {
+        if (option.long) |long| {
+            if (std.mem.eql(u8, long, name)) {
+                return option;
+            }
+        }
+    }
+
+    return null;
+}
+
+fn findShortOption(
+    options: []const Command.Option,
+    short: u8,
+) ?*const Command.Option {
+    for (options) |*option| {
+        if (option.short) |option_short| {
+            if (option_short == short) {
+                return option;
+            }
         }
     }
 

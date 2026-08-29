@@ -1,3 +1,5 @@
+const std = @import("std");
+
 const CLI = @import("CLI.zig");
 const Command = @import("Command.zig");
 
@@ -8,9 +10,28 @@ target: Target,
 arguments: []const Argument,
 options: []const Option,
 
+pub fn deinit(self: *Invocation, allocator: std.mem.Allocator) void {
+    allocator.free(self.arguments);
+    allocator.free(self.options);
+}
+
 pub const Target = union(enum) {
     cli: *const CLI,
     command: *const Command,
+
+    pub fn arguments(self: Target) []const Command.Argument {
+        return switch (self) {
+            .cli => |cli| cli.arguments,
+            .command => |command| command.arguments,
+        };
+    }
+
+    pub fn options(self: Target) []const Command.Option {
+        return switch (self) {
+            .cli => |cli| cli.options,
+            .command => |command| command.options,
+        };
+    }
 };
 
 pub const Argument = struct {
