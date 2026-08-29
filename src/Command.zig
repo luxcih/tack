@@ -17,5 +17,13 @@ pub const Argument = struct {
 pub const Option = struct {
     long: ?[]const u8 = null,
     short: ?u8 = null,
+
+    kind: Kind = .flag,
+
     description: ?[]const u8 = null,
+
+    pub const Kind = enum {
+        flag,
+        value,
+    };
 };
