@@ -1,3 +1,5 @@
+const std = @import("std");
+
 const CLI = @import("CLI.zig");
 const Command = @import("Command.zig");
 
