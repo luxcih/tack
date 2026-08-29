@@ -81,6 +81,13 @@ pub const Target = union(enum) {
         };
     }
 
+    pub fn persistent_options(self: Target) []const Command.Option {
+        return switch (self) {
+            .cli => |cli| cli.persistent_options,
+            .command => |command| command.persistent_options,
+        };
+    }
+
     pub fn action(self: Target) ?Action {
         return switch (self) {
             .cli => |cli| cli.action,

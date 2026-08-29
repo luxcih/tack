@@ -9,6 +9,7 @@ aliases: []const []const u8 = &.{},
 
 arguments: []const Argument = &.{},
 options: []const Option = &.{},
+persistent_options: []const Option = &.{},
 commands: []const Command = &.{},
 
 action: ?Action = null,

@@ -58,7 +58,7 @@ pub fn parse(
             else
                 null;
 
-            const option = findLongOption(target, name) orelse return error.UnknownOption;
+            const option = findLongOption(path, name) orelse return error.UnknownOption;
 
             switch (option.kind) {
                 .flag => {
@@ -96,7 +96,7 @@ pub fn parse(
 
             while (short_index < short_args.len) {
                 const short = short_args[short_index];
-                const option = findShortOption(target, short) orelse return error.UnknownOption;
+                const option = findShortOption(path, short) orelse return error.UnknownOption;
 
                 switch (option.kind) {
                     .flag => {
@@ -220,11 +220,24 @@ fn findCommand(
 }
 
 fn findLongOption(
-    target: Invocation.Target,
+    path: []const Invocation.Target,
     name: []const u8,
 ) ?*const Command.Option {
+    if (path.len == 0) return null;
+
+    const target = path[path.len - 1];
+
     if (findLongOptionIn(target.options(), name)) |option| {
         return option;
+    }
+
+    var index = path.len;
+    while (index > 0) {
+        index -= 1;
+
+        if (findLongOptionIn(path[index].persistent_options(), name)) |option| {
+            return option;
+        }
     }
 
     return null;
@@ -244,11 +257,24 @@ fn findLongOptionIn(
 }
 
 fn findShortOption(
-    target: Invocation.Target,
+    path: []const Invocation.Target,
     short: u8,
 ) ?*const Command.Option {
+    if (path.len == 0) return null;
+
+    const target = path[path.len - 1];
+
     if (findShortOptionIn(target.options(), short)) |option| {
         return option;
+    }
+
+    var index = path.len;
+    while (index > 0) {
+        index -= 1;
+
+        if (findShortOptionIn(path[index].persistent_options(), short)) |option| {
+            return option;
+        }
     }
 
     return null;
@@ -700,4 +726,78 @@ test "allows an attached value in a short option group" {
 
     try std.testing.expect(invocation.has_option("verbose"));
     try std.testing.expectEqualStrings("file.txt", invocation.option_value("output").?);
+}
+
+
+test "inherits persistent options from the root CLI" {
+    const cli = CLI{
+        .name = "app",
+        .persistent_options = &.{
+            .{ .long = "verbose", .short = 'v' },
+        },
+        .commands = &.{
+            .{
+                .name = "config",
+                .commands = &.{
+                    .{ .name = "set" },
+                },
+            },
+        },
+    };
+
+    var invocation = try parse(
+        std.testing.allocator,
+        &cli,
+        &.{ "config", "set", "--verbose" },
+    );
+    defer invocation.deinit(std.testing.allocator);
+
+    try std.testing.expect(invocation.has_option("verbose"));
+}
+
+test "inherits persistent options from nested commands" {
+    const cli = CLI{
+        .name = "app",
+        .commands = &.{
+            .{
+                .name = "config",
+                .persistent_options = &.{
+                    .{ .long = "format", .kind = .value },
+                },
+                .commands = &.{
+                    .{ .name = "set" },
+                },
+            },
+        },
+    };
+
+    var invocation = try parse(
+        std.testing.allocator,
+        &cli,
+        &.{ "config", "set", "--format", "json" },
+    );
+    defer invocation.deinit(std.testing.allocator);
+
+    try std.testing.expectEqualStrings("json", invocation.option_value("format").?);
+}
+
+test "does not inherit normal options" {
+    const cli = CLI{
+        .name = "app",
+        .options = &.{
+            .{ .long = "verbose" },
+        },
+        .commands = &.{
+            .{ .name = "config" },
+        },
+    };
+
+    try std.testing.expectError(
+        error.UnknownOption,
+        parse(
+            std.testing.allocator,
+            &cli,
+            &.{ "config", "--verbose" },
+        ),
+    );
 }

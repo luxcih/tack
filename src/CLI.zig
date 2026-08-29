@@ -12,6 +12,7 @@ description: ?[]const u8 = null,
 
 arguments: []const Command.Argument = &.{},
 options: []const Command.Option = &.{},
+persistent_options: []const Command.Option = &.{},
 commands: []const Command = &.{},
 action: ?Action = null,
 final_action: ?Action = null,
