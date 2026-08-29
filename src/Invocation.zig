@@ -16,6 +16,28 @@ pub fn deinit(self: *Invocation, allocator: std.mem.Allocator) void {
     allocator.free(self.options);
 }
 
+pub fn argument(self: *const Invocation, name: []const u8) ?[]const u8 {
+    for (self.arguments) |argument| {
+        if (std.mem.eql(u8, argument.definition.name, name)) {
+            return argument.value;
+        }
+    }
+
+    return null;
+}
+
+pub fn option(self: *const Invocation, name: []const u8) ?Option.Value {
+    for (self.options) |option| {
+        if (option.definition.long) |long| {
+            if (std.mem.eql(u8, long, name)) {
+                return option.value;
+            }
+        }
+    }
+
+    return null;
+}
+
 pub const Target = union(enum) {
     cli: *const CLI,
     command: *const Command,

@@ -313,3 +313,41 @@ test "rejects invalid invocations" {
         parse(std.testing.allocator, &cli, &.{ "one", "two" }),
     );
 }
+
+
+test "looks up invocation values by name" {
+    const cli = CLI{
+        .name = "app",
+        .arguments = &.{
+            .{ .name = "file" },
+        },
+        .options = &.{
+            .{ .long = "force", .short = 'f' },
+            .{ .long = "output", .short = 'o', .kind = .value },
+        },
+    };
+
+    var invocation = try parse(
+        std.testing.allocator,
+        &cli,
+        &.{ "input.txt", "--force", "--output", "result.txt" },
+    );
+    defer invocation.deinit(std.testing.allocator);
+
+    try std.testing.expectEqualStrings("input.txt", invocation.argument("file").?);
+    try std.testing.expect(invocation.argument("missing") == null);
+
+    const force = invocation.option("force").?;
+    switch (force) {
+        .flag => |value| try std.testing.expect(value),
+        .value => return error.TestUnexpectedResult,
+    }
+
+    const output = invocation.option("output").?;
+    switch (output) {
+        .value => |value| try std.testing.expectEqualStrings("result.txt", value),
+        .flag => return error.TestUnexpectedResult,
+    }
+
+    try std.testing.expect(invocation.option("missing") == null);
+}
