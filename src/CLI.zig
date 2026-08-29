@@ -3,6 +3,7 @@ const std = @import("std");
 const Action = @import("Action.zig");
 const Command = @import("Command.zig");
 const Behavior = @import("Behavior.zig");
+const Context = @import("Context.zig");
 const Invocation = @import("Invocation.zig");
 const Parser = @import("Parser.zig");
 
@@ -179,7 +180,30 @@ pub fn run(
     var invocation = try Parser.parse(allocator, self, args);
     defer invocation.deinit(allocator);
 
+    var context = Context{
+        .allocator = allocator,
+    };
+
+    if (try self.runBehaviors(&context, &invocation)) {
+        return;
+    }
+
     try self.dispatch(&invocation);
+}
+
+pub fn runBehaviors(
+    self: *const CLI,
+    context: *Context,
+    invocation: *const Invocation,
+) !bool {
+    for (self.behaviors) |behavior| {
+        switch (try behavior.handle(context, invocation)) {
+            .proceed => {},
+            .handled => return true,
+        }
+    }
+
+    return false;
 }
 
 pub fn dispatch(self: *const CLI, invocation: *const Invocation) !void {
@@ -319,4 +343,69 @@ test "validates nested commands recursively" {
     };
 
     try std.testing.expectError(error.DuplicateLongOption, cli.validate());
+}
+
+
+test "handled behavior stops dispatch" {
+    const Test = struct {
+        var behavior_called = false;
+        var action_called = false;
+
+        fn handle(_: *@import("Context.zig"), _: *const Invocation) !Behavior.Result {
+            behavior_called = true;
+            return .handled;
+        }
+
+        fn action(_: *const Invocation) !void {
+            action_called = true;
+        }
+    };
+
+    Test.behavior_called = false;
+    Test.action_called = false;
+
+    const cli = CLI{
+        .name = "app",
+        .behaviors = &.{.{
+            .handle = Test.handle,
+        }},
+        .action = Test.action,
+    };
+
+    try cli.run(std.testing.allocator, &.{});
+
+    try std.testing.expect(Test.behavior_called);
+    try std.testing.expect(!Test.action_called);
+}
+
+test "proceeding behavior allows dispatch" {
+    const Test = struct {
+        var behavior_called = false;
+        var action_called = false;
+
+        fn handle(_: *@import("Context.zig"), _: *const Invocation) !Behavior.Result {
+            behavior_called = true;
+            return .proceed;
+        }
+
+        fn action(_: *const Invocation) !void {
+            action_called = true;
+        }
+    };
+
+    Test.behavior_called = false;
+    Test.action_called = false;
+
+    const cli = CLI{
+        .name = "app",
+        .behaviors = &.{.{
+            .handle = Test.handle,
+        }},
+        .action = Test.action,
+    };
+
+    try cli.run(std.testing.allocator, &.{});
+
+    try std.testing.expect(Test.behavior_called);
+    try std.testing.expect(Test.action_called);
 }
