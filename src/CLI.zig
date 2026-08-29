@@ -2,6 +2,7 @@ const std = @import("std");
 
 const Action = @import("Action.zig").Action;
 const ActionResult = @import("Action.zig").Result;
+const FinalAction = @import("Action.zig").FinalAction;
 const Command = @import("Command.zig");
 const Invocation = @import("Invocation.zig");
 const Parser = @import("Parser.zig");
@@ -15,7 +16,7 @@ arguments: []const Command.Argument = &.{},
 options: []const Command.Option = &.{},
 commands: []const Command = &.{},
 action: ?Action = null,
-final_action: ?Action = null,
+final_action: ?FinalAction = null,
 
 pub const ValidationError = error{
     RequiredArgumentAfterOptional,
@@ -213,7 +214,7 @@ pub fn dispatch(self: *const CLI, invocation: *const Invocation) !void {
     }
 
     if (self.final_action) |action| {
-        _ = try action(invocation);
+        try action(invocation);
     }
 }
 
@@ -310,10 +311,9 @@ test "root action runs before root final action" {
             return .continue_;
         }
 
-        fn final(_: *const Invocation) !ActionResult {
+        fn final(_: *const Invocation) !void {
             try std.testing.expect(action_called);
             final_called = true;
-            return .continue_;
         }
     };
 
@@ -362,9 +362,8 @@ test "stops dispatch when the action returns stop" {
             return .stop;
         }
 
-        fn final(_: *const Invocation) !ActionResult {
+        fn final(_: *const Invocation) !void {
             final_called = true;
-            return .continue_;
         }
     };
 
