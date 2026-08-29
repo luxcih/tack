@@ -25,25 +25,92 @@ pub const ValidationError = error{
     DuplicateShortOption,
     DuplicateCommand,
     DuplicateCommandName,
+    DuplicateVisibleOption,
 };
 
 pub fn validate(self: *const CLI) ValidationError!void {
-    try validate_definition(
+    try validate_node(
         self.arguments,
         self.options,
+        self.persistent_options,
         self.commands,
+        &.{},
     );
-
 }
 
-fn validate_definition(
+fn validate_node(
     arguments: []const Command.Argument,
     options: []const Command.Option,
+    persistent_options: []const Command.Option,
     commands: []const Command,
+    inherited_persistent: []const []const Command.Option,
 ) ValidationError!void {
     try validate_arguments(arguments);
     try validate_options(options);
-    try validate_commands(commands);
+    try validate_options(persistent_options);
+
+    // Local and persistent options on this node share the same invocation scope.
+    for (options) |option| {
+        for (persistent_options) |persistent_option| {
+            if (options_conflict(option, persistent_option)) {
+                return error.DuplicateVisibleOption;
+            }
+        }
+
+        for (inherited_persistent) |ancestor_options| {
+            for (ancestor_options) |ancestor_option| {
+                if (options_conflict(option, ancestor_option)) {
+                    return error.DuplicateVisibleOption;
+                }
+            }
+        }
+    }
+
+    // Persistent options remain visible throughout the entire subtree.
+    for (persistent_options) |option| {
+        for (inherited_persistent) |ancestor_options| {
+            for (ancestor_options) |ancestor_option| {
+                if (options_conflict(option, ancestor_option)) {
+                    return error.DuplicateVisibleOption;
+                }
+            }
+        }
+    }
+
+    var visible_persistent = std.ArrayList([]const Command.Option).empty;
+    defer visible_persistent.deinit(std.heap.page_allocator);
+
+    for (inherited_persistent) |ancestor_options| {
+        try visible_persistent.append(std.heap.page_allocator, ancestor_options);
+    }
+    try visible_persistent.append(std.heap.page_allocator, persistent_options);
+
+    try validate_commands(commands, visible_persistent.items);
+}
+
+fn validate_commands(
+    commands: []const Command,
+    inherited_persistent: []const []const Command.Option,
+) ValidationError!void {
+    for (commands, 0..) |command, index| {
+        try validate_node(
+            command.arguments,
+            command.options,
+            command.persistent_options,
+            command.commands,
+            inherited_persistent,
+        );
+
+        for (commands[index + 1 ..]) |other| {
+            if (std.mem.eql(u8, command.name, other.name)) {
+                return error.DuplicateCommand;
+            }
+
+            if (command_name_conflicts(command, other)) {
+                return error.DuplicateCommandName;
+            }
+        }
+    }
 }
 
 fn validate_arguments(arguments: []const Command.Argument) ValidationError!void {
@@ -105,26 +172,6 @@ fn options_conflict(
     }
 
     return false;
-}
-
-fn validate_commands(commands: []const Command) ValidationError!void {
-    for (commands, 0..) |command, index| {
-        try validate_definition(
-            command.arguments,
-            command.options,
-            command.commands,
-        );
-
-        for (commands[index + 1 ..]) |other| {
-            if (std.mem.eql(u8, command.name, other.name)) {
-                return error.DuplicateCommand;
-            }
-
-            if (command_name_conflicts(command, other)) {
-                return error.DuplicateCommandName;
-            }
-        }
-    }
 }
 
 fn command_name_conflicts(first: Command, second: Command) bool {
@@ -435,4 +482,61 @@ test "root action runs before root final action" {
 
     try std.testing.expect(Test.action_called);
     try std.testing.expect(Test.final_called);
+}
+
+
+test "rejects a local option that conflicts with an inherited persistent option" {
+    const cli = CLI{
+        .name = "app",
+        .persistent_options = &.{
+            .{ .long = "verbose", .short = 'v' },
+        },
+        .commands = &.{
+            .{
+                .name = "config",
+                .options = &.{
+                    .{ .long = "verbose" },
+                },
+            },
+        },
+    };
+
+    try std.testing.expectError(error.DuplicateVisibleOption, cli.validate());
+}
+
+test "rejects persistent options that conflict across a command path" {
+    const cli = CLI{
+        .name = "app",
+        .persistent_options = &.{
+            .{ .long = "verbose" },
+        },
+        .commands = &.{
+            .{
+                .name = "config",
+                .persistent_options = &.{
+                    .{ .long = "verbose" },
+                },
+            },
+        },
+    };
+
+    try std.testing.expectError(error.DuplicateVisibleOption, cli.validate());
+}
+
+test "allows unrelated local options in different command branches" {
+    const cli = CLI{
+        .name = "app",
+        .commands = &.{
+            .{
+                .name = "config",
+                .options = &.{.{ .long = "force" }},
+            },
+            .{
+                .name = "remove",
+                .options = &.{.{ .long = "force" }},
+            },
+        },
+    };
+
+    try cli.validate();
 }
