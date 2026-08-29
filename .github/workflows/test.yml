@@ -11,4 +11,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: xyzzylabs/setup-zig@v1
-      - run: zig build test --summary all
+      - name: Check formatting
+        run: zig fmt --check .
+      - name: Run tests
+        run: zig build test --summary all
