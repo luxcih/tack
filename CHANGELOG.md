@@ -1,6 +1,6 @@
 # Changelog
 
-All notable changes to Tack are documented in this file.
+All notable changes to Tack will be documented in this file.
 
 ## [Unreleased]
 
@@ -8,13 +8,13 @@ All notable changes to Tack are documented in this file.
 
 ### Added
 
-- Initial public release
 - Commands and nested subcommands
 - Positional arguments, including remaining arguments
-- Flags and value options
 - Short and long options
 - Command aliases
 - Persistent options
 - Default option values
 - Actions and final actions
-- Optional built-in help
+- Explicitly composable built-in help
+- Public API documentation
+- Formatting checks in continuous integration
