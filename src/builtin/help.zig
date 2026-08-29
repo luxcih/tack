@@ -13,6 +13,14 @@ pub const option = Command.Option{
 pub const command = Command{
     .name = "help",
     .description = "Show help for a command.",
+    .arguments = &.{
+        .{
+            .name = "command",
+            .description = "Command path to show help for.",
+            .required = false,
+            .kind = .remaining,
+        },
+    },
 };
 
 pub fn action(invocation: *const Invocation) !Action.Result {
@@ -80,3 +88,5 @@ pub fn render(invocation: *const Invocation) !void {
         }
     }
 }
+
+

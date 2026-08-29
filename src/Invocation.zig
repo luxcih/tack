@@ -51,6 +51,24 @@ pub fn argument(self: *const Invocation, name: []const u8) ?[]const u8 {
     return null;
 }
 
+/// Returns all parsed values belonging to an argument definition.
+pub fn argument_values(
+    self: *const Invocation,
+    allocator: std.mem.Allocator,
+    name: []const u8,
+) ![]const []const u8 {
+    var values = std.ArrayList([]const u8).empty;
+    errdefer values.deinit(allocator);
+
+    for (self.arguments) |parsed_argument| {
+        if (std.mem.eql(u8, parsed_argument.definition.name, name)) {
+            try values.append(allocator, parsed_argument.value);
+        }
+    }
+
+    return values.toOwnedSlice(allocator);
+}
+
 pub fn option(self: *const Invocation, name: []const u8) ?Option.Value {
     for (self.options) |parsed_option| {
         if (parsed_option.definition.long) |long| {
