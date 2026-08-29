@@ -80,27 +80,27 @@ fn render_definition(
 
     if (options.len > 0) {
         try writer.writeAll("\nOptions:\n");
-        for (options) |option| {
+        for (options) |item| {
             try writer.writeAll("  ");
 
-            if (option.short) |short| {
+            if (item.short) |short| {
                 try writer.print("-{c}", .{short});
-                if (option.long != null) try writer.writeAll(", ");
+                if (item.long != null) try writer.writeAll(", ");
             }
 
-            if (option.long) |long| {
+            if (item.long) |long| {
                 try writer.print("--{s}", .{long});
             }
 
-            if (option.kind == .value) {
+            if (item.kind == .value) {
                 try writer.writeAll(" <VALUE>");
             }
 
-            if (option.description) |text| {
+            if (item.description) |text| {
                 try writer.print("  {s}", .{text});
             }
 
-            if (option.default) |value| {
+            if (item.default) |value| {
                 try writer.print(" (default: {s})", .{value});
             }
 
