@@ -38,6 +38,25 @@ pub fn option(self: *const Invocation, name: []const u8) ?Option.Value {
     return null;
 }
 
+
+pub fn hasOption(self: *const Invocation, name: []const u8) bool {
+    const option = self.option(name) orelse return false;
+
+    return switch (option) {
+        .flag => |value| value,
+        .value => true,
+    };
+}
+
+pub fn optionValue(self: *const Invocation, name: []const u8) ?[]const u8 {
+    const option = self.option(name) orelse return null;
+
+    return switch (option) {
+        .flag => null,
+        .value => |value| value,
+    };
+}
+
 pub const Target = union(enum) {
     cli: *const CLI,
     command: *const Command,

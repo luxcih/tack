@@ -351,3 +351,29 @@ test "looks up invocation values by name" {
 
     try std.testing.expect(invocation.option("missing") == null);
 }
+
+
+test "provides convenient option helpers" {
+    const cli = CLI{
+        .name = "app",
+        .options = &.{
+            .{ .long = "force", .short = 'f' },
+            .{ .long = "output", .short = 'o', .kind = .value },
+        },
+    };
+
+    var invocation = try parse(
+        std.testing.allocator,
+        &cli,
+        &.{ "--force", "--output", "result.txt" },
+    );
+    defer invocation.deinit(std.testing.allocator);
+
+    try std.testing.expect(invocation.hasOption("force"));
+    try std.testing.expect(invocation.hasOption("output"));
+    try std.testing.expect(!invocation.hasOption("missing"));
+
+    try std.testing.expect(invocation.optionValue("force") == null);
+    try std.testing.expectEqualStrings("result.txt", invocation.optionValue("output").?);
+    try std.testing.expect(invocation.optionValue("missing") == null);
+}
