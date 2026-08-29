@@ -1,5 +1,6 @@
 const std = @import("std");
 
+const Action = @import("Action.zig");
 const CLI = @import("CLI.zig");
 const Command = @import("Command.zig");
 
@@ -30,6 +31,13 @@ pub const Target = union(enum) {
         return switch (self) {
             .cli => |cli| cli.options,
             .command => |command| command.options,
+        };
+    }
+
+    pub fn action(self: Target) ?Action {
+        return switch (self) {
+            .cli => |cli| cli.action,
+            .command => |command| command.action,
         };
     }
 };
