@@ -176,36 +176,20 @@ fn findCommand(
 }
 
 fn findLongOption(
-    path: []const Invocation.Target,
+    path: []const Target,
     name: []const u8,
 ) ?*const Command.Option {
-    if (path.len == 0) return null;
+    var path_index = path.len;
+    while (path_index > 0) {
+        path_index -= 1;
+        const target = path[path_index];
 
-    const target = path[path.len - 1];
+        for (target.options()) |*option| {
+            if (path_index + 1 < path.len and !option.persistent) continue;
 
-    if (findLongOptionIn(target.options(), name)) |option| {
-        return option;
-    }
-
-    var index = path.len;
-    while (index > 0) {
-        index -= 1;
-
-        if (findLongOptionIn(path[index].persistent_options(), name)) |option| {
-            return option;
-        }
-    }
-
-    return null;
-}
-
-fn findLongOptionIn(
-    options: []const Command.Option,
-    name: []const u8,
-) ?*const Command.Option {
-    for (options) |*option| {
-        if (option.long) |long| {
-            if (std.mem.eql(u8, long, name)) return option;
+            if (option.long) |long| {
+                if (std.mem.eql(u8, long, name)) return option;
+            }
         }
     }
 
@@ -213,36 +197,20 @@ fn findLongOptionIn(
 }
 
 fn findShortOption(
-    path: []const Invocation.Target,
+    path: []const Target,
     short: u8,
 ) ?*const Command.Option {
-    if (path.len == 0) return null;
+    var path_index = path.len;
+    while (path_index > 0) {
+        path_index -= 1;
+        const target = path[path_index];
 
-    const target = path[path.len - 1];
+        for (target.options()) |*option| {
+            if (path_index + 1 < path.len and !option.persistent) continue;
 
-    if (findShortOptionIn(target.options(), short)) |option| {
-        return option;
-    }
-
-    var index = path.len;
-    while (index > 0) {
-        index -= 1;
-
-        if (findShortOptionIn(path[index].persistent_options(), short)) |option| {
-            return option;
-        }
-    }
-
-    return null;
-}
-
-fn findShortOptionIn(
-    options: []const Command.Option,
-    short: u8,
-) ?*const Command.Option {
-    for (options) |*option| {
-        if (option.short) |option_short| {
-            if (option_short == short) return option;
+            if (option.short) |option_short| {
+                if (option_short == short) return option;
+            }
         }
     }
 
@@ -646,8 +614,8 @@ test "allows an attached value in a short option group" {
 test "inherits persistent options from the root CLI" {
     const cli = CLI{
         .name = "app",
-        .persistent_options = &.{
-            .{ .long = "verbose", .short = 'v' },
+        .options = &.{
+            .{ .long = "verbose", .short = 'v', .persistent = true },
         },
         .commands = &.{
             .{
@@ -675,8 +643,8 @@ test "inherits persistent options from nested commands" {
         .commands = &.{
             .{
                 .name = "config",
-                .persistent_options = &.{
-                    .{ .long = "format", .kind = .value },
+                .options = &.{
+                    .{ .long = "format", .kind = .value, .persistent = true },
                 },
                 .commands = &.{
                     .{ .name = "set" },
@@ -720,7 +688,7 @@ test "does not inherit normal options" {
 test "allows persistent options before commands" {
     const cli = CLI{
         .name = "app",
-        .persistent_options = &.{.{ .long = "verbose", .short = 'v' }},
+        .options = &.{.{ .long = "verbose", .short = 'v', .persistent = true }},
         .commands = &.{.{ .name = "config", .commands = &.{.{ .name = "set" }} }},
     };
 
@@ -741,7 +709,7 @@ test "allows persistent options before commands" {
 test "allows persistent options between commands" {
     const cli = CLI{
         .name = "app",
-        .persistent_options = &.{.{ .long = "verbose", .short = 'v' }},
+        .options = &.{.{ .long = "verbose", .short = 'v', .persistent = true }},
         .commands = &.{.{ .name = "config", .commands = &.{.{ .name = "set" }} }},
     };
 
@@ -762,7 +730,7 @@ test "allows persistent options between commands" {
 test "allows persistent options after commands" {
     const cli = CLI{
         .name = "app",
-        .persistent_options = &.{.{ .long = "verbose" }},
+        .options = &.{.{ .long = "verbose", .persistent = true }},
         .commands = &.{.{ .name = "config", .commands = &.{.{ .name = "set" }} }},
     };
 

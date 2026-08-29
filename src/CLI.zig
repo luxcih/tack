@@ -12,8 +12,7 @@ name: []const u8,
 description: ?[]const u8 = null,
 
 arguments: []const Command.Argument = &.{},
-options: []const Command.Option = &.{},
-persistent_options: []const Command.Option = &.{},
+options: []const Command.Option = &.{}
 commands: []const Command = &.{},
 action: ?Action = null,
 final_action: ?Action = null,
@@ -33,40 +32,48 @@ pub fn validate(self: *const CLI) ValidationError!void {
     try validate_node(
         self.arguments,
         self.options,
-        self.persistent_options,
         self.commands,
+        &.{},
     );
 }
 
 fn validate_node(
     arguments: []const Command.Argument,
     options: []const Command.Option,
-    persistent_options: []const Command.Option,
     commands: []const Command,
+    inherited_persistent: []const Command.Option,
 ) ValidationError!void {
     try validate_arguments(arguments);
     try validate_options(options);
-    try validate_options(persistent_options);
-    try validate_visible_options(options, persistent_options);
+    try validate_visible_options(options, inherited_persistent);
+
+    var persistent_count: usize = 0;
+    for (options) |option| {
+        if (option.persistent) persistent_count += 1;
+    }
+
+    if (persistent_count > 0) {
+        // Validate descendants against each persistent option individually.
+        for (options) |option| {
+            if (!option.persistent) continue;
+            for (commands) |command| {
+                try validate_subtree_against_option(command, option);
+            }
+        }
+    }
 
     for (commands, 0..) |command, index| {
         try validate_node(
             command.arguments,
             command.options,
-            command.persistent_options,
             command.commands,
-        );
-
-        try validate_subtree_against_options(
-            command,
-            persistent_options,
+            options,
         );
 
         for (commands[index + 1 ..]) |other| {
             if (std.mem.eql(u8, command.name, other.name)) {
                 return error.DuplicateCommand;
             }
-
             if (command_name_conflicts(command, other)) {
                 return error.DuplicateCommandName;
             }
@@ -74,25 +81,28 @@ fn validate_node(
     }
 }
 
-fn validate_subtree_against_options(
+fn validate_subtree_against_option(
     command: Command,
-    ancestor_options: []const Command.Option,
+    ancestor_option: Command.Option,
 ) ValidationError!void {
-    try validate_visible_options(command.options, ancestor_options);
-    try validate_visible_options(command.persistent_options, ancestor_options);
+    for (command.options) |option| {
+        if (options_conflict(option, ancestor_option)) {
+            return error.DuplicateVisibleOption;
+        }
+    }
 
     for (command.commands) |child| {
-        try validate_subtree_against_options(child, ancestor_options);
+        try validate_subtree_against_option(child, ancestor_option);
     }
 }
 
 fn validate_visible_options(
-    first: []const Command.Option,
-    second: []const Command.Option,
+    options: []const Command.Option,
+    inherited: []const Command.Option,
 ) ValidationError!void {
-    for (first) |option| {
-        for (second) |other| {
-            if (options_conflict(option, other)) {
+    for (options) |option| {
+        for (inherited) |ancestor| {
+            if (ancestor.persistent and options_conflict(option, ancestor)) {
                 return error.DuplicateVisibleOption;
             }
         }
@@ -422,44 +432,6 @@ test "root action runs before root final action" {
 }
 
 
-test "rejects a local option that conflicts with an inherited persistent option" {
-    const cli = CLI{
-        .name = "app",
-        .persistent_options = &.{
-            .{ .long = "verbose", .short = 'v' },
-        },
-        .commands = &.{
-            .{
-                .name = "config",
-                .options = &.{
-                    .{ .long = "verbose" },
-                },
-            },
-        },
-    };
-
-    try std.testing.expectError(error.DuplicateVisibleOption, cli.validate());
-}
-
-test "rejects persistent options that conflict across a command path" {
-    const cli = CLI{
-        .name = "app",
-        .persistent_options = &.{
-            .{ .long = "verbose" },
-        },
-        .commands = &.{
-            .{
-                .name = "config",
-                .persistent_options = &.{
-                    .{ .long = "verbose" },
-                },
-            },
-        },
-    };
-
-    try std.testing.expectError(error.DuplicateVisibleOption, cli.validate());
-}
-
 test "allows unrelated local options in different command branches" {
     const cli = CLI{
         .name = "app",
@@ -508,4 +480,22 @@ test "stops dispatch when the action returns stop" {
 
     try std.testing.expect(Test.action_called);
     try std.testing.expect(!Test.final_called);
+}
+
+test "persistent options are inherited through descendants" {
+    const cli = CLI{
+        .name = "app",
+        .options = &.{.{ .long = "verbose", .persistent = true }},
+        .commands = &.{.{ .name = "config", .commands = &.{.{ .name = "set" }} }},
+    };
+    try cli.validate();
+}
+
+test "rejects descendant options that conflict with persistent options" {
+    const cli = CLI{
+        .name = "app",
+        .options = &.{.{ .long = "verbose", .persistent = true }},
+        .commands = &.{.{ .name = "config", .options = &.{.{ .long = "verbose" }} }},
+    };
+    try std.testing.expectError(error.DuplicateVisibleOption, cli.validate());
 }

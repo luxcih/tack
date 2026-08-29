@@ -6,8 +6,7 @@ description: ?[]const u8 = null,
 aliases: []const []const u8 = &.{},
 
 arguments: []const Argument = &.{},
-options: []const Option = &.{},
-persistent_options: []const Option = &.{},
+options: []const Option = &.{}
 commands: []const Command = &.{},
 
 
@@ -23,6 +22,7 @@ pub const Option = struct {
 
     kind: Kind = .flag,
     default: ?[]const u8 = null,
+    persistent: bool = false,
 
     description: ?[]const u8 = null,
 
