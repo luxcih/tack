@@ -244,7 +244,6 @@ fn matches(command: *const Command, arg: []const u8) bool {
     return false;
 }
 
-
 test "parses positional arguments and options" {
     const cli = CLI{
         .name = "app",
@@ -319,7 +318,6 @@ test "rejects invalid invocations" {
     );
 }
 
-
 test "looks up invocation values by name" {
     const cli = CLI{
         .name = "app",
@@ -357,7 +355,6 @@ test "looks up invocation values by name" {
     try std.testing.expect(invocation.option("missing") == null);
 }
 
-
 test "provides convenient option helpers" {
     const cli = CLI{
         .name = "app",
@@ -382,7 +379,6 @@ test "provides convenient option helpers" {
     try std.testing.expectEqualStrings("result.txt", invocation.option_value("output").?);
     try std.testing.expect(invocation.option_value("missing") == null);
 }
-
 
 test "allows optional arguments to be omitted" {
     const cli = CLI{
@@ -418,7 +414,6 @@ test "still requires required arguments" {
         parse(std.testing.allocator, &cli, &.{}),
     );
 }
-
 
 test "uses default option values without marking options present" {
     const cli = CLI{
@@ -466,7 +461,6 @@ test "explicit option values override defaults" {
     try std.testing.expectEqualStrings("json", invocation.option_value("format").?);
 }
 
-
 test "stops parsing options after double dash" {
     const cli = CLI{
         .name = "app",
@@ -508,7 +502,6 @@ test "continues parsing positional arguments after double dash" {
     try std.testing.expectEqualStrings("one", invocation.argument("first").?);
     try std.testing.expectEqualStrings("-two", invocation.argument("second").?);
 }
-
 
 test "parses inline long option values" {
     const cli = CLI{
@@ -559,7 +552,6 @@ test "rejects inline values for flags" {
         parse(std.testing.allocator, &cli, &.{"--force=true"}),
     );
 }
-
 
 test "parses combined short flags" {
     const cli = CLI{
@@ -622,7 +614,6 @@ test "allows an attached value in a short option group" {
     try std.testing.expect(invocation.has_option("verbose"));
     try std.testing.expectEqualStrings("file.txt", invocation.option_value("output").?);
 }
-
 
 test "inherits persistent options from the root CLI" {
     const cli = CLI{
@@ -697,7 +688,6 @@ test "does not inherit normal options" {
     );
 }
 
-
 test "allows persistent options before commands" {
     const cli = CLI{
         .name = "app",
@@ -756,7 +746,6 @@ test "allows persistent options after commands" {
 
     try std.testing.expect(invocation.has_option("verbose"));
 }
-
 
 test "commands cannot appear after positional arguments begin" {
     const cli = CLI{
@@ -837,7 +826,6 @@ test "double dash prevents later command resolution" {
         invocation.arguments[0].value,
     );
 }
-
 
 test "parent command receives arguments when it is the final target" {
     const cli = CLI{
@@ -957,7 +945,6 @@ test "remaining argument must be last" {
 
     try std.testing.expectError(error.RemainingArgumentNotLast, cli.validate());
 }
-
 
 test "required remaining arguments are satisfied by parsed values" {
     const cli = CLI{

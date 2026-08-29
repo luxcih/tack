@@ -118,7 +118,6 @@ pub const Target = union(enum) {
             .command => |command| command.options,
         };
     }
-
 };
 
 /// A positional argument parsed from an invocation.
@@ -138,7 +137,6 @@ pub const Option = struct {
         value: []const u8,
     };
 };
-
 
 test "persistent option defaults are inherited" {
     const Parser = @import("Parser.zig");

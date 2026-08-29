@@ -251,7 +251,6 @@ test "run parses and dispatches" {
     try std.testing.expect(Test.called);
 }
 
-
 test "run validates before parsing" {
     const cli = CLI{
         .name = "app",
@@ -263,7 +262,6 @@ test "run validates before parsing" {
         cli.run(std.testing.allocator, &.{}),
     );
 }
-
 
 test "rejects duplicate command names" {
     const cli = CLI{
@@ -311,7 +309,6 @@ test "validates nested commands recursively" {
     try std.testing.expectError(error.DuplicateLongOption, cli.validate());
 }
 
-
 test "root action runs before root final action" {
     const Test = struct {
         var action_called = false;
@@ -343,7 +340,6 @@ test "root action runs before root final action" {
     try std.testing.expect(Test.final_called);
 }
 
-
 test "allows unrelated local options in different command branches" {
     const cli = CLI{
         .name = "app",
@@ -361,7 +357,6 @@ test "allows unrelated local options in different command branches" {
 
     try cli.validate();
 }
-
 
 test "stops dispatch when the action returns stop" {
     const Test = struct {
