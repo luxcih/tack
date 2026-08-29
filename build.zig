@@ -16,4 +16,13 @@ pub fn build(b: *std.Build) void {
     });
 
     b.installArtifact(tack_lib);
+
+    const tests = b.addTest(.{
+        .root_module = tack_mod,
+    });
+
+    const run_tests = b.addRunArtifact(tests);
+
+    const test_step = b.step("test", "Run tests");
+    test_step.dependOn(&run_tests.step);
 }
