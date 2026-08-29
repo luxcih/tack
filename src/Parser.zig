@@ -24,11 +24,10 @@ pub fn parse(
     cli: *const CLI,
     args: []const []const u8,
 ) !Invocation {
-    const resolution = resolve(cli, args);
-    const target = resolution.target;
+    var path = std.ArrayList(Target).empty;
+    errdefer path.deinit(allocator);
 
-    const path = try resolve_path(allocator, cli, args, resolution.index);
-    errdefer allocator.free(path);
+    try path.append(allocator, .{ .cli = cli });
 
     var parsed_arguments = std.ArrayList(Invocation.Argument).empty;
     errdefer parsed_arguments.deinit(allocator);
@@ -36,12 +35,10 @@ pub fn parse(
     var parsed_options = std.ArrayList(Invocation.Option).empty;
     errdefer parsed_options.deinit(allocator);
 
-    const definitions = target.arguments();
-
-
-    var index = resolution.index;
+    var commands = cli.commands;
     var argument_index: usize = 0;
     var options_ended = false;
+    var index: usize = 0;
 
     while (index < args.len) {
         const arg = args[index];
@@ -49,7 +46,10 @@ pub fn parse(
         if (!options_ended and std.mem.eql(u8, arg, "--")) {
             options_ended = true;
             index += 1;
-        } else if (!options_ended and std.mem.startsWith(u8, arg, "--")) {
+            continue;
+        }
+
+        if (!options_ended and std.mem.startsWith(u8, arg, "--")) {
             const option_arg = arg[2..];
             const name_end = std.mem.indexOfScalar(u8, option_arg, '=') orelse option_arg.len;
             const name = option_arg[0..name_end];
@@ -58,13 +58,11 @@ pub fn parse(
             else
                 null;
 
-            const option = findLongOption(path, name) orelse return error.UnknownOption;
+            const option = findLongOption(path.items, name) orelse return error.UnknownOption;
 
             switch (option.kind) {
                 .flag => {
-                    if (inline_value != null) {
-                        return error.UnexpectedOptionValue;
-                    }
+                    if (inline_value != null) return error.UnexpectedOptionValue;
 
                     try parsed_options.append(allocator, .{
                         .definition = option,
@@ -74,10 +72,7 @@ pub fn parse(
                 },
                 .value => {
                     const value = inline_value orelse blk: {
-                        if (index + 1 >= args.len) {
-                            return error.MissingOptionValue;
-                        }
-
+                        if (index + 1 >= args.len) return error.MissingOptionValue;
                         index += 1;
                         break :blk args[index];
                     };
@@ -89,14 +84,17 @@ pub fn parse(
                     index += 1;
                 },
             }
-        } else if (!options_ended and arg.len > 1 and arg[0] == '-') {
+            continue;
+        }
+
+        if (!options_ended and arg.len > 1 and arg[0] == '-') {
             const short_args = arg[1..];
             var short_index: usize = 0;
             var consumed_next = false;
 
             while (short_index < short_args.len) {
                 const short = short_args[short_index];
-                const option = findShortOption(path, short) orelse return error.UnknownOption;
+                const option = findShortOption(path.items, short) orelse return error.UnknownOption;
 
                 switch (option.kind) {
                     .flag => {
@@ -104,19 +102,14 @@ pub fn parse(
                             .definition = option,
                             .value = .{ .flag = true },
                         });
-
                         short_index += 1;
                     },
                     .value => {
                         const attached_value = short_args[short_index + 1 ..];
-
                         const value = if (attached_value.len > 0)
                             attached_value
                         else blk: {
-                            if (index + 1 >= args.len) {
-                                return error.MissingOptionValue;
-                            }
-
+                            if (index + 1 >= args.len) return error.MissingOptionValue;
                             consumed_next = true;
                             break :blk args[index + 1];
                         };
@@ -125,37 +118,50 @@ pub fn parse(
                             .definition = option,
                             .value = .{ .value = value },
                         });
-
                         break;
                     },
                 }
             }
 
             index += if (consumed_next) 2 else 1;
-        } else {
-            if (argument_index >= definitions.len) {
-                return error.UnexpectedArgument;
-            }
-
-            try parsed_arguments.append(allocator, .{
-                .definition = &definitions[argument_index],
-                .value = arg,
-            });
-
-            argument_index += 1;
-            index += 1;
+            continue;
         }
+
+        if (!options_ended) {
+            if (findCommand(commands, arg)) |command| {
+                if (argument_index != 0) return error.UnexpectedArgument;
+
+                try path.append(allocator, .{ .command = command });
+                commands = command.commands;
+                index += 1;
+                continue;
+            }
+        }
+
+        const target = path.items[path.items.len - 1];
+        const definitions = target.arguments();
+
+        if (argument_index >= definitions.len) return error.UnexpectedArgument;
+
+        try parsed_arguments.append(allocator, .{
+            .definition = &definitions[argument_index],
+            .value = arg,
+        });
+
+        argument_index += 1;
+        index += 1;
     }
 
+    const target = path.items[path.items.len - 1];
+    const definitions = target.arguments();
+
     for (definitions[argument_index..]) |definition| {
-        if (definition.required) {
-            return error.MissingArgument;
-        }
+        if (definition.required) return error.MissingArgument;
     }
 
     return .{
         .target = target,
-        .path = path,
+        .path = try path.toOwnedSlice(allocator),
         .arguments = try parsed_arguments.toOwnedSlice(allocator),
         .options = try parsed_options.toOwnedSlice(allocator),
     };
@@ -800,4 +806,64 @@ test "does not inherit normal options" {
             &.{ "config", "--verbose" },
         ),
     );
+}
+
+
+test "allows persistent options before commands" {
+    const cli = CLI{
+        .name = "app",
+        .persistent_options = &.{.{ .long = "verbose", .short = 'v' }},
+        .commands = &.{.{ .name = "config", .commands = &.{.{ .name = "set" }} }},
+    };
+
+    var invocation = try parse(
+        std.testing.allocator,
+        &cli,
+        &.{ "--verbose", "config", "set" },
+    );
+    defer invocation.deinit(std.testing.allocator);
+
+    try std.testing.expect(invocation.has_option("verbose"));
+    switch (invocation.target) {
+        .command => |command| try std.testing.expectEqualStrings("set", command.name),
+        .cli => return error.TestUnexpectedResult,
+    }
+}
+
+test "allows persistent options between commands" {
+    const cli = CLI{
+        .name = "app",
+        .persistent_options = &.{.{ .long = "verbose", .short = 'v' }},
+        .commands = &.{.{ .name = "config", .commands = &.{.{ .name = "set" }} }},
+    };
+
+    var invocation = try parse(
+        std.testing.allocator,
+        &cli,
+        &.{ "config", "-v", "set" },
+    );
+    defer invocation.deinit(std.testing.allocator);
+
+    try std.testing.expect(invocation.has_option("verbose"));
+    switch (invocation.target) {
+        .command => |command| try std.testing.expectEqualStrings("set", command.name),
+        .cli => return error.TestUnexpectedResult,
+    }
+}
+
+test "allows persistent options after commands" {
+    const cli = CLI{
+        .name = "app",
+        .persistent_options = &.{.{ .long = "verbose" }},
+        .commands = &.{.{ .name = "config", .commands = &.{.{ .name = "set" }} }},
+    };
+
+    var invocation = try parse(
+        std.testing.allocator,
+        &cli,
+        &.{ "config", "set", "--verbose" },
+    );
+    defer invocation.deinit(std.testing.allocator);
+
+    try std.testing.expect(invocation.has_option("verbose"));
 }
