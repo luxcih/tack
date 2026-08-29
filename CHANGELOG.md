@@ -18,5 +18,3 @@ All notable changes to Tack are documented in this file.
 - Default option values
 - Actions and final actions
 - Optional built-in help
-- Public API documentation
-- Continuous integration with formatting and test checks
