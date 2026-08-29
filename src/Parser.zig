@@ -408,13 +408,13 @@ test "provides convenient option helpers" {
     );
     defer invocation.deinit(std.testing.allocator);
 
-    try std.testing.expect(invocation.hasOption("force"));
-    try std.testing.expect(invocation.hasOption("output"));
-    try std.testing.expect(!invocation.hasOption("missing"));
+    try std.testing.expect(invocation.has_option("force"));
+    try std.testing.expect(invocation.has_option("output"));
+    try std.testing.expect(!invocation.has_option("missing"));
 
-    try std.testing.expect(invocation.optionValue("force") == null);
-    try std.testing.expectEqualStrings("result.txt", invocation.optionValue("output").?);
-    try std.testing.expect(invocation.optionValue("missing") == null);
+    try std.testing.expect(invocation.option_value("force") == null);
+    try std.testing.expectEqualStrings("result.txt", invocation.option_value("output").?);
+    try std.testing.expect(invocation.option_value("missing") == null);
 }
 
 
@@ -473,8 +473,8 @@ test "uses default option values without marking options present" {
     );
     defer invocation.deinit(std.testing.allocator);
 
-    try std.testing.expect(!invocation.hasOption("format"));
-    try std.testing.expectEqualStrings("text", invocation.optionValue("format").?);
+    try std.testing.expect(!invocation.has_option("format"));
+    try std.testing.expectEqualStrings("text", invocation.option_value("format").?);
 }
 
 test "explicit option values override defaults" {
@@ -496,8 +496,8 @@ test "explicit option values override defaults" {
     );
     defer invocation.deinit(std.testing.allocator);
 
-    try std.testing.expect(invocation.hasOption("format"));
-    try std.testing.expectEqualStrings("json", invocation.optionValue("format").?);
+    try std.testing.expect(invocation.has_option("format"));
+    try std.testing.expectEqualStrings("json", invocation.option_value("format").?);
 }
 
 
@@ -559,7 +559,7 @@ test "parses inline long option values" {
     );
     defer invocation.deinit(std.testing.allocator);
 
-    try std.testing.expectEqualStrings("json", invocation.optionValue("format").?);
+    try std.testing.expectEqualStrings("json", invocation.option_value("format").?);
 }
 
 test "allows equals signs inside inline option values" {
@@ -577,7 +577,7 @@ test "allows equals signs inside inline option values" {
     );
     defer invocation.deinit(std.testing.allocator);
 
-    try std.testing.expectEqualStrings("one=two", invocation.optionValue("value").?);
+    try std.testing.expectEqualStrings("one=two", invocation.option_value("value").?);
 }
 
 test "rejects inline values for flags" {
@@ -612,9 +612,9 @@ test "parses combined short flags" {
     );
     defer invocation.deinit(std.testing.allocator);
 
-    try std.testing.expect(invocation.hasOption("all"));
-    try std.testing.expect(invocation.hasOption("brief"));
-    try std.testing.expect(invocation.hasOption("count"));
+    try std.testing.expect(invocation.has_option("all"));
+    try std.testing.expect(invocation.has_option("brief"));
+    try std.testing.expect(invocation.has_option("count"));
 }
 
 test "allows a value option at the end of a short group" {
@@ -633,8 +633,8 @@ test "allows a value option at the end of a short group" {
     );
     defer invocation.deinit(std.testing.allocator);
 
-    try std.testing.expect(invocation.hasOption("verbose"));
-    try std.testing.expectEqualStrings("file.txt", invocation.optionValue("output").?);
+    try std.testing.expect(invocation.has_option("verbose"));
+    try std.testing.expectEqualStrings("file.txt", invocation.option_value("output").?);
 }
 
 test "allows an attached value in a short option group" {
@@ -653,6 +653,6 @@ test "allows an attached value in a short option group" {
     );
     defer invocation.deinit(std.testing.allocator);
 
-    try std.testing.expect(invocation.hasOption("verbose"));
-    try std.testing.expectEqualStrings("file.txt", invocation.optionValue("output").?);
+    try std.testing.expect(invocation.has_option("verbose"));
+    try std.testing.expectEqualStrings("file.txt", invocation.option_value("output").?);
 }

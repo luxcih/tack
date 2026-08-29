@@ -38,11 +38,11 @@ pub fn option(self: *const Invocation, name: []const u8) ?Option.Value {
     return null;
 }
 
-pub fn hasOption(self: *const Invocation, name: []const u8) bool {
+pub fn has_option(self: *const Invocation, name: []const u8) bool {
     return self.option(name) != null;
 }
 
-pub fn optionValue(self: *const Invocation, name: []const u8) ?[]const u8 {
+pub fn option_value(self: *const Invocation, name: []const u8) ?[]const u8 {
     if (self.option(name)) |parsed_option| {
         return switch (parsed_option) {
             .flag => null,
