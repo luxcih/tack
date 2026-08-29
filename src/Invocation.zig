@@ -1,11 +1,17 @@
+const CLI = @import("CLI.zig");
 const Command = @import("Command.zig");
 
 const Invocation = @This();
 
-command: *const Command,
+target: Target,
 
 arguments: []const Argument,
 options: []const Option,
+
+pub const Target = union(enum) {
+    cli: *const CLI,
+    command: *const Command,
+};
 
 pub const Argument = struct {
     definition: *const Command.Argument,

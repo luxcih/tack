@@ -2,11 +2,9 @@ const std = @import("std");
 
 const CLI = @import("CLI.zig");
 const Command = @import("Command.zig");
+const Invocation = @import("Invocation.zig");
 
-pub const Target = union(enum) {
-    cli: *const CLI,
-    command: *const Command,
-};
+pub const Target = Invocation.Target;
 
 pub const Resolution = struct {
     target: Target,
