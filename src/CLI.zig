@@ -300,3 +300,138 @@ test "validates nested commands recursively" {
 
     try std.testing.expectError(error.DuplicateLongOption, cli.validate());
 }
+
+
+test "dispatches actions along the command path before the final action" {
+    const Test = struct {
+        var order: [4]u8 = undefined;
+        var count: usize = 0;
+
+        fn record(value: u8) void {
+            order[count] = value;
+            count += 1;
+        }
+
+        fn root(_: *const Invocation) !void {
+            record(1);
+        }
+
+        fn config(_: *const Invocation) !void {
+            record(2);
+        }
+
+        fn set(_: *const Invocation) !void {
+            record(3);
+        }
+
+        fn final(_: *const Invocation) !void {
+            record(4);
+        }
+    };
+
+    Test.count = 0;
+
+    const cli = CLI{
+        .name = "app",
+        .action = Test.root,
+        .commands = &.{
+            .{
+                .name = "config",
+                .action = Test.config,
+                .commands = &.{
+                    .{
+                        .name = "set",
+                        .action = Test.set,
+                        .final_action = Test.final,
+                    },
+                },
+            },
+        },
+    };
+
+    var invocation = try Parser.parse(
+        std.testing.allocator,
+        &cli,
+        &.{ "config", "set" },
+    );
+    defer invocation.deinit(std.testing.allocator);
+
+    try cli.dispatch(&invocation);
+
+    try std.testing.expectEqual(@as(usize, 4), Test.count);
+    try std.testing.expectEqual(@as(u8, 1), Test.order[0]);
+    try std.testing.expectEqual(@as(u8, 2), Test.order[1]);
+    try std.testing.expectEqual(@as(u8, 3), Test.order[2]);
+    try std.testing.expectEqual(@as(u8, 4), Test.order[3]);
+}
+
+test "runs only the reached target's final action" {
+    const Test = struct {
+        var root_called = false;
+        var config_called = false;
+
+        fn root(_: *const Invocation) !void {
+            root_called = true;
+        }
+
+        fn config(_: *const Invocation) !void {
+            config_called = true;
+        }
+    };
+
+    Test.root_called = false;
+    Test.config_called = false;
+
+    const cli = CLI{
+        .name = "app",
+        .final_action = Test.root,
+        .commands = &.{
+            .{
+                .name = "config",
+                .final_action = Test.config,
+            },
+        },
+    };
+
+    var invocation = try Parser.parse(
+        std.testing.allocator,
+        &cli,
+        &.{"config"},
+    );
+    defer invocation.deinit(std.testing.allocator);
+
+    try cli.dispatch(&invocation);
+
+    try std.testing.expect(!Test.root_called);
+    try std.testing.expect(Test.config_called);
+}
+
+test "root action runs before root final action" {
+    const Test = struct {
+        var action_called = false;
+        var final_called = false;
+
+        fn action(_: *const Invocation) !void {
+            action_called = true;
+        }
+
+        fn final(_: *const Invocation) !void {
+            try std.testing.expect(action_called);
+            final_called = true;
+        }
+    };
+
+    Test.action_called = false;
+    Test.final_called = false;
+
+    const cli = CLI{
+        .name = "app",
+        .action = Test.action,
+        .final_action = Test.final,
+    };
+
+    try cli.run(std.testing.allocator, &.{});
+
+    try std.testing.expect(Test.action_called);
+    try std.testing.expect(Test.final_called);
+}
