@@ -17,9 +17,9 @@ pub fn deinit(self: *Invocation, allocator: std.mem.Allocator) void {
 }
 
 pub fn argument(self: *const Invocation, name: []const u8) ?[]const u8 {
-    for (self.arguments) |argument| {
-        if (std.mem.eql(u8, argument.definition.name, name)) {
-            return argument.value;
+    for (self.arguments) |parsed_argument| {
+        if (std.mem.eql(u8, parsed_argument.definition.name, name)) {
+            return parsed_argument.value;
         }
     }
 
@@ -27,10 +27,10 @@ pub fn argument(self: *const Invocation, name: []const u8) ?[]const u8 {
 }
 
 pub fn option(self: *const Invocation, name: []const u8) ?Option.Value {
-    for (self.options) |option| {
-        if (option.definition.long) |long| {
+    for (self.options) |parsed_option| {
+        if (parsed_option.definition.long) |long| {
             if (std.mem.eql(u8, long, name)) {
-                return option.value;
+                return parsed_option.value;
             }
         }
     }
