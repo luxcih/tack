@@ -37,11 +37,15 @@ pub fn parse(
 
     var index = resolution.index;
     var argument_index: usize = 0;
+    var options_ended = false;
 
     while (index < args.len) {
         const arg = args[index];
 
-        if (std.mem.startsWith(u8, arg, "--")) {
+        if (!options_ended and std.mem.eql(u8, arg, "--")) {
+            options_ended = true;
+            index += 1;
+        } else if (!options_ended and std.mem.startsWith(u8, arg, "--")) {
             const name = arg[2..];
             const option = findLongOption(options, name) orelse return error.UnknownOption;
 
@@ -65,7 +69,7 @@ pub fn parse(
                     index += 2;
                 },
             }
-        } else if (arg.len > 1 and arg[0] == '-') {
+        } else if (!options_ended and arg.len > 1 and arg[0] == '-') {
             const option = findShortOption(options, arg[1]) orelse return error.UnknownOption;
 
             if (arg.len != 2) {
@@ -461,4 +465,47 @@ test "explicit option values override defaults" {
 
     try std.testing.expect(invocation.hasOption("format"));
     try std.testing.expectEqualStrings("json", invocation.optionValue("format").?);
+}
+
+
+test "stops parsing options after double dash" {
+    const cli = CLI{
+        .name = "app",
+        .arguments = &.{
+            .{ .name = "value" },
+        },
+        .options = &.{
+            .{ .long = "force", .short = 'f' },
+        },
+    };
+
+    var invocation = try parse(
+        std.testing.allocator,
+        &cli,
+        &.{ "--", "--force" },
+    );
+    defer invocation.deinit(std.testing.allocator);
+
+    try std.testing.expectEqual(@as(usize, 0), invocation.options.len);
+    try std.testing.expectEqualStrings("--force", invocation.argument("value").?);
+}
+
+test "continues parsing positional arguments after double dash" {
+    const cli = CLI{
+        .name = "app",
+        .arguments = &.{
+            .{ .name = "first" },
+            .{ .name = "second" },
+        },
+    };
+
+    var invocation = try parse(
+        std.testing.allocator,
+        &cli,
+        &.{ "one", "--", "-two" },
+    );
+    defer invocation.deinit(std.testing.allocator);
+
+    try std.testing.expectEqualStrings("one", invocation.argument("first").?);
+    try std.testing.expectEqualStrings("-two", invocation.argument("second").?);
 }
