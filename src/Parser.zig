@@ -196,3 +196,120 @@ fn matches(command: *const Command, arg: []const u8) bool {
 
     return false;
 }
+
+
+test "resolves nested commands" {
+    const cli = CLI{
+        .name = "app",
+        .commands = &.{
+            .{
+                .name = "remote",
+                .commands = &.{
+                    .{ .name = "add" },
+                },
+            },
+        },
+    };
+
+    const resolution = resolve(&cli, &.{ "remote", "add", "origin" });
+
+    try std.testing.expectEqual(@as(usize, 2), resolution.index);
+
+    switch (resolution.target) {
+        .command => |command| try std.testing.expectEqualStrings("add", command.name),
+        .cli => return error.TestUnexpectedResult,
+    }
+}
+
+test "resolves command aliases" {
+    const cli = CLI{
+        .name = "app",
+        .commands = &.{
+            .{
+                .name = "remove",
+                .aliases = &.{ "rm" },
+            },
+        },
+    };
+
+    const resolution = resolve(&cli, &.{"rm"});
+
+    switch (resolution.target) {
+        .command => |command| try std.testing.expectEqualStrings("remove", command.name),
+        .cli => return error.TestUnexpectedResult,
+    }
+}
+
+test "parses positional arguments and options" {
+    const cli = CLI{
+        .name = "app",
+        .commands = &.{
+            .{
+                .name = "add",
+                .arguments = &.{
+                    .{ .name = "name" },
+                    .{ .name = "url" },
+                },
+                .options = &.{
+                    .{ .long = "force", .short = 'f' },
+                    .{ .long = "output", .short = 'o', .kind = .value },
+                },
+            },
+        },
+    };
+
+    var invocation = try parse(
+        std.testing.allocator,
+        &cli,
+        &.{ "add", "origin", "https://example.com", "--force", "-o", "file.txt" },
+    );
+    defer invocation.deinit(std.testing.allocator);
+
+    try std.testing.expectEqual(@as(usize, 2), invocation.arguments.len);
+    try std.testing.expectEqualStrings("origin", invocation.arguments[0].value);
+    try std.testing.expectEqualStrings("https://example.com", invocation.arguments[1].value);
+
+    try std.testing.expectEqual(@as(usize, 2), invocation.options.len);
+
+    switch (invocation.options[0].value) {
+        .flag => |value| try std.testing.expect(value),
+        .value => return error.TestUnexpectedResult,
+    }
+
+    switch (invocation.options[1].value) {
+        .value => |value| try std.testing.expectEqualStrings("file.txt", value),
+        .flag => return error.TestUnexpectedResult,
+    }
+}
+
+test "rejects invalid invocations" {
+    const cli = CLI{
+        .name = "app",
+        .arguments = &.{
+            .{ .name = "file" },
+        },
+        .options = &.{
+            .{ .long = "output", .kind = .value },
+        },
+    };
+
+    try std.testing.expectError(
+        error.UnknownOption,
+        parse(std.testing.allocator, &cli, &.{ "--unknown", "file.txt" }),
+    );
+
+    try std.testing.expectError(
+        error.MissingOptionValue,
+        parse(std.testing.allocator, &cli, &.{"--output"}),
+    );
+
+    try std.testing.expectError(
+        error.MissingArgument,
+        parse(std.testing.allocator, &cli, &.{}),
+    );
+
+    try std.testing.expectError(
+        error.UnexpectedArgument,
+        parse(std.testing.allocator, &cli, &.{ "one", "two" }),
+    );
+}
