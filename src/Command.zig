@@ -12,6 +12,7 @@ options: []const Option = &.{},
 commands: []const Command = &.{},
 
 action: ?Action = null,
+final_action: ?Action = null,
 
 pub const Argument = struct {
     name: []const u8,

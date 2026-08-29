@@ -85,6 +85,13 @@ pub const Target = union(enum) {
             .command => |command| command.action,
         };
     }
+
+    pub fn final_action(self: Target) ?Action {
+        return switch (self) {
+            .cli => |cli| cli.final_action,
+            .command => |command| command.final_action,
+        };
+    }
 };
 
 pub const Argument = struct {

@@ -14,7 +14,7 @@ arguments: []const Command.Argument = &.{},
 options: []const Command.Option = &.{},
 commands: []const Command = &.{},
 action: ?Action = null,
-
+final_action: ?Action = null,
 
 pub const ValidationError = error{
     RequiredArgumentAfterOptional,
@@ -158,8 +158,13 @@ pub fn run(
 pub fn dispatch(self: *const CLI, invocation: *const Invocation) !void {
     _ = self;
 
-    const action = invocation.target.action() orelse return;
-    try action(invocation);
+    if (invocation.target.action()) |action| {
+        try action(invocation);
+    }
+
+    if (invocation.target.final_action()) |action| {
+        try action(invocation);
+    }
 }
 
 test "dispatches the target action" {
