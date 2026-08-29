@@ -6,11 +6,6 @@ const Invocation = @import("Invocation.zig");
 
 pub const Target = Invocation.Target;
 
-pub const Resolution = struct {
-    target: Target,
-    index: usize,
-};
-
 pub const Error = error{
     UnknownOption,
     MissingOptionValue,
@@ -165,51 +160,6 @@ pub fn parse(
         .arguments = try parsed_arguments.toOwnedSlice(allocator),
         .options = try parsed_options.toOwnedSlice(allocator),
     };
-}
-
-pub fn resolve(
-    cli: *const CLI,
-    args: []const []const u8,
-) Resolution {
-    var target: Target = .{ .cli = cli };
-    var commands = cli.commands;
-    var index: usize = 0;
-
-    while (index < args.len) {
-        const command = findCommand(commands, args[index]) orelse break;
-
-        target = .{ .command = command };
-        commands = command.commands;
-        index += 1;
-    }
-
-    return .{
-        .target = target,
-        .index = index,
-    };
-}
-
-fn resolve_path(
-    allocator: std.mem.Allocator,
-    cli: *const CLI,
-    args: []const []const u8,
-    command_count: usize,
-) ![]const Target {
-    var path = std.ArrayList(Target).empty;
-    errdefer path.deinit(allocator);
-
-    try path.append(allocator, .{ .cli = cli });
-
-    var commands = cli.commands;
-    var index: usize = 0;
-
-    while (index < command_count) : (index += 1) {
-        const command = findCommand(commands, args[index]).?;
-        try path.append(allocator, .{ .command = command });
-        commands = command.commands;
-    }
-
-    return path.toOwnedSlice(allocator);
 }
 
 fn findCommand(
@@ -866,4 +816,85 @@ test "allows persistent options after commands" {
     defer invocation.deinit(std.testing.allocator);
 
     try std.testing.expect(invocation.has_option("verbose"));
+}
+
+
+test "commands cannot appear after positional arguments begin" {
+    const cli = CLI{
+        .name = "app",
+        .arguments = &.{.{ .name = "file" }},
+        .commands = &.{.{ .name = "config" }},
+    };
+
+    try std.testing.expectError(
+        error.UnexpectedArgument,
+        parse(
+            std.testing.allocator,
+            &cli,
+            &.{ "file.txt", "config" },
+        ),
+    );
+}
+
+test "options may appear after positional arguments" {
+    const cli = CLI{
+        .name = "app",
+        .arguments = &.{.{ .name = "file" }},
+        .options = &.{.{ .long = "force" }},
+    };
+
+    var invocation = try parse(
+        std.testing.allocator,
+        &cli,
+        &.{ "file.txt", "--force" },
+    );
+    defer invocation.deinit(std.testing.allocator);
+
+    try std.testing.expect(invocation.has_option("force"));
+}
+
+test "double dash ends option parsing" {
+    const cli = CLI{
+        .name = "app",
+        .arguments = &.{.{ .name = "value" }},
+        .options = &.{.{ .long = "force" }},
+    };
+
+    var invocation = try parse(
+        std.testing.allocator,
+        &cli,
+        &.{ "--", "--force" },
+    );
+    defer invocation.deinit(std.testing.allocator);
+
+    try std.testing.expect(!invocation.has_option("force"));
+    try std.testing.expectEqualStrings(
+        "--force",
+        invocation.arguments[0].value,
+    );
+}
+
+test "double dash prevents later command resolution" {
+    const cli = CLI{
+        .name = "app",
+        .arguments = &.{.{ .name = "value" }},
+        .commands = &.{.{ .name = "config" }},
+    };
+
+    var invocation = try parse(
+        std.testing.allocator,
+        &cli,
+        &.{ "--", "config" },
+    );
+    defer invocation.deinit(std.testing.allocator);
+
+    switch (invocation.target) {
+        .cli => {},
+        .command => return error.TestUnexpectedResult,
+    }
+
+    try std.testing.expectEqualStrings(
+        "config",
+        invocation.arguments[0].value,
+    );
 }
