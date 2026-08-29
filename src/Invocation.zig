@@ -11,16 +11,6 @@ path: []const Target,
 arguments: []const Argument,
 options: []const Option,
 
-/// Returns the final target reached by this invocation.
-pub fn target(self: *const Invocation) Target {
-    return self.target;
-}
-
-/// Returns the complete target path, starting with the CLI root.
-pub fn path(self: *const Invocation) []const Target {
-    return self.path;
-}
-
 pub fn deinit(self: *Invocation, allocator: std.mem.Allocator) void {
     allocator.free(self.path);
     allocator.free(self.arguments);
