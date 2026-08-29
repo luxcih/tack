@@ -158,8 +158,10 @@ pub fn run(
 pub fn dispatch(self: *const CLI, invocation: *const Invocation) !void {
     _ = self;
 
-    if (invocation.target.action()) |action| {
-        try action(invocation);
+    for (invocation.path) |target| {
+        if (target.action()) |action| {
+            try action(invocation);
+        }
     }
 
     if (invocation.target.final_action()) |action| {
@@ -167,7 +169,7 @@ pub fn dispatch(self: *const CLI, invocation: *const Invocation) !void {
     }
 }
 
-test "dispatches the target action" {
+test "dispatches the target final action" {
     const Test = struct {
         var called = false;
 
@@ -184,7 +186,7 @@ test "dispatches the target action" {
         .commands = &.{
             .{
                 .name = "hello",
-                .action = Test.action,
+                .final_action = Test.action,
             },
         },
     };

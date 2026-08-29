@@ -7,11 +7,13 @@ const Command = @import("Command.zig");
 const Invocation = @This();
 
 target: Target,
+path: []const Target,
 
 arguments: []const Argument,
 options: []const Option,
 
 pub fn deinit(self: *Invocation, allocator: std.mem.Allocator) void {
+    allocator.free(self.path);
     allocator.free(self.arguments);
     allocator.free(self.options);
 }

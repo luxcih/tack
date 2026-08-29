@@ -3,7 +3,6 @@ const std = @import("std");
 const CLI = @import("CLI.zig");
 const Command = @import("Command.zig");
 const Invocation = @import("Invocation.zig");
-const Behavior = @import("Behavior.zig");
 
 pub const Target = Invocation.Target;
 
@@ -27,6 +26,9 @@ pub fn parse(
 ) !Invocation {
     const resolution = resolve(cli, args);
     const target = resolution.target;
+
+    const path = try resolve_path(allocator, cli, args, resolution.index);
+    errdefer allocator.free(path);
 
     var parsed_arguments = std.ArrayList(Invocation.Argument).empty;
     errdefer parsed_arguments.deinit(allocator);
@@ -56,7 +58,7 @@ pub fn parse(
             else
                 null;
 
-            const option = findLongOption(cli, target, name) orelse return error.UnknownOption;
+            const option = findLongOption(target, name) orelse return error.UnknownOption;
 
             switch (option.kind) {
                 .flag => {
@@ -94,7 +96,7 @@ pub fn parse(
 
             while (short_index < short_args.len) {
                 const short = short_args[short_index];
-                const option = findShortOption(cli, target, short) orelse return error.UnknownOption;
+                const option = findShortOption(target, short) orelse return error.UnknownOption;
 
                 switch (option.kind) {
                     .flag => {
@@ -153,6 +155,7 @@ pub fn parse(
 
     return .{
         .target = target,
+        .path = path,
         .arguments = try parsed_arguments.toOwnedSlice(allocator),
         .options = try parsed_options.toOwnedSlice(allocator),
     };
@@ -180,6 +183,29 @@ pub fn resolve(
     };
 }
 
+fn resolve_path(
+    allocator: std.mem.Allocator,
+    cli: *const CLI,
+    args: []const []const u8,
+    command_count: usize,
+) ![]const Target {
+    var path = std.ArrayList(Target).empty;
+    errdefer path.deinit(allocator);
+
+    try path.append(allocator, .{ .cli = cli });
+
+    var commands = cli.commands;
+    var index: usize = 0;
+
+    while (index < command_count) : (index += 1) {
+        const command = findCommand(commands, args[index]).?;
+        try path.append(allocator, .{ .command = command });
+        commands = command.commands;
+    }
+
+    return path.toOwnedSlice(allocator);
+}
+
 fn findCommand(
     commands: []const Command,
     arg: []const u8,
@@ -194,18 +220,11 @@ fn findCommand(
 }
 
 fn findLongOption(
-    cli: *const CLI,
     target: Invocation.Target,
     name: []const u8,
 ) ?*const Command.Option {
     if (findLongOptionIn(target.options(), name)) |option| {
         return option;
-    }
-
-    for (cli.behaviors) |*behavior| {
-        if (findLongOptionIn(behavior.options, name)) |option| {
-            return option;
-        }
     }
 
     return null;
@@ -225,18 +244,11 @@ fn findLongOptionIn(
 }
 
 fn findShortOption(
-    cli: *const CLI,
     target: Invocation.Target,
     short: u8,
 ) ?*const Command.Option {
     if (findShortOptionIn(target.options(), short)) |option| {
         return option;
-    }
-
-    for (cli.behaviors) |*behavior| {
-        if (findShortOptionIn(behavior.options, short)) |option| {
-            return option;
-        }
     }
 
     return null;
@@ -688,31 +700,4 @@ test "allows an attached value in a short option group" {
 
     try std.testing.expect(invocation.has_option("verbose"));
     try std.testing.expectEqualStrings("file.txt", invocation.option_value("output").?);
-}
-
-
-test "parses options contributed by behaviors" {
-    const noop = struct {
-        fn handle(_: *@import("Context.zig"), _: *const Invocation) !Behavior.Result {
-            return .proceed;
-        }
-    }.handle;
-
-    const cli = CLI{
-        .name = "app",
-        .commands = &.{.{ .name = "build" }},
-        .behaviors = &.{.{
-            .options = &.{.{ .long = "verbose", .short = 'v' }},
-            .handle = noop,
-        }},
-    };
-
-    var invocation = try parse(
-        std.testing.allocator,
-        &cli,
-        &.{ "build", "--verbose" },
-    );
-    defer invocation.deinit(std.testing.allocator);
-
-    try std.testing.expect(invocation.has_option("verbose"));
 }
