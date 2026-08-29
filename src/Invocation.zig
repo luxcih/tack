@@ -12,12 +12,12 @@ arguments: []const Argument,
 options: []const Option,
 
 /// Returns the final target reached by this invocation.
-pub fn get_target(self: *const Invocation) Target {
+pub fn target(self: *const Invocation) Target {
     return self.target;
 }
 
 /// Returns the complete target path, starting with the CLI root.
-pub fn get_path(self: *const Invocation) []const Target {
+pub fn path(self: *const Invocation) []const Target {
     return self.path;
 }
 
