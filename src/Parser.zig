@@ -155,11 +155,11 @@ pub fn parse(
     const target = path.items[path.items.len - 1];
     const definitions = target.arguments();
 
-    for (definitions) |definition| {
+    for (definitions) |*definition| {
         if (!definition.required) continue;
 
         for (parsed_arguments.items) |parsed_argument| {
-            if (parsed_argument.definition == &definition) break;
+            if (parsed_argument.definition == definition) break;
         } else {
             return error.MissingArgument;
         }
