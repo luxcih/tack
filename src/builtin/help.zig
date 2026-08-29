@@ -1,5 +1,6 @@
 const std = @import("std");
 const Action = @import("../Action.zig");
+const CLI = @import("../CLI.zig");
 const Command = @import("../Command.zig");
 const Invocation = @import("../Invocation.zig");
 
@@ -24,22 +25,84 @@ pub const command = Command{
 };
 
 pub fn action(invocation: *const Invocation) !Action.Result {
-    if (!invocation.has_option("help")) {
-        return .continue_;
+    if (invocation.has_option("help")) {
+        try render_path(invocation.getPath());
+        return .stop;
     }
 
-    try render(invocation);
-    return .stop;
+    switch (invocation.getTarget()) {
+        .command => |target| {
+            if (std.mem.eql(u8, target.name, command.name)) {
+                const allocator = std.heap.page_allocator;
+                const names = try invocation.argument_values(allocator, "command");
+                defer allocator.free(names);
+
+                const root = switch (invocation.getPath()[0]) {
+                    .cli => |cli| cli,
+                    .command => unreachable,
+                };
+
+                const path = try resolve(allocator, root, names);
+                defer allocator.free(path);
+
+                try render_path(path);
+                return .stop;
+            }
+        },
+        .cli => {},
+    }
+
+    return .continue_;
 }
 
 pub fn render(invocation: *const Invocation) !void {
-    const allocator = std.heap.page_allocator;
-    const visible_options = try invocation.visible_options(allocator);
-    defer allocator.free(visible_options);
-    const target = invocation.getTarget();
+    try render_path(invocation.getPath());
+}
+
+pub fn resolve(
+    allocator: std.mem.Allocator,
+    cli: *const CLI,
+    names: []const []const u8,
+) ![]const Invocation.Target {
+    var path = std.ArrayList(Invocation.Target).empty;
+    errdefer path.deinit(allocator);
+
+    try path.append(allocator, .{ .cli = cli });
+
+    var commands = cli.commands;
+
+    for (names) |name| {
+        var found: ?*const Command = null;
+
+        for (commands) |*candidate| {
+            if (std.mem.eql(u8, candidate.name, name)) {
+                found = candidate;
+                break;
+            }
+
+            for (candidate.aliases) |alias| {
+                if (std.mem.eql(u8, alias, name)) {
+                    found = candidate;
+                    break;
+                }
+            }
+
+            if (found != null) break;
+        }
+
+        const target = found orelse return error.UnknownCommand;
+        try path.append(allocator, .{ .command = target });
+        commands = target.commands;
+    }
+
+    return path.toOwnedSlice(allocator);
+}
+
+pub fn render_path(path: []const Invocation.Target) !void {
+    const target = path[path.len - 1];
 
     std.debug.print("Usage: ", .{});
-    for (invocation.getPath(), 0..) |path_target, index| {
+    for (path, 0..) |path_target, index| {
         if (index != 0) std.debug.print(" ", .{});
 
         switch (path_target) {
@@ -52,7 +115,18 @@ pub fn render(invocation: *const Invocation) !void {
         std.debug.print(" [arguments]", .{});
     }
 
-    if (visible_options.len > 0) {
+    var has_options = false;
+    for (path, 0..) |path_target, index| {
+        for (path_target.options()) |option_definition| {
+            if (index + 1 == path.len or option_definition.persistent) {
+                has_options = true;
+                break;
+            }
+        }
+        if (has_options) break;
+    }
+
+    if (has_options) {
         std.debug.print(" [options]", .{});
     }
 
@@ -69,24 +143,26 @@ pub fn render(invocation: *const Invocation) !void {
         }
     }
 
-    if (visible_options.len > 0) {
+    if (has_options) {
         std.debug.print("\nOptions:\n", .{});
-        for (visible_options) |option_pointer| {
-            const option_definition = option_pointer;
-            std.debug.print("  ", .{});
-            if (option_definition.short) |short| {
-                std.debug.print("-{c}", .{short});
-                if (option_definition.long != null) std.debug.print(", ", .{});
+
+        for (path, 0..) |path_target, index| {
+            for (path_target.options()) |option_definition| {
+                if (index + 1 < path.len and !option_definition.persistent) continue;
+
+                std.debug.print("  ", .{});
+                if (option_definition.short) |short| {
+                    std.debug.print("-{c}", .{short});
+                    if (option_definition.long != null) std.debug.print(", ", .{});
+                }
+                if (option_definition.long) |long| {
+                    std.debug.print("--{s}", .{long});
+                }
+                if (option_definition.description) |description| {
+                    std.debug.print("  {s}", .{description});
+                }
+                std.debug.print("\n", .{});
             }
-            if (option_definition.long) |long| {
-                std.debug.print("--{s}", .{long});
-            }
-            if (option_definition.description) |description| {
-                std.debug.print("  {s}", .{description});
-            }
-            std.debug.print("\n", .{});
         }
     }
 }
-
-
