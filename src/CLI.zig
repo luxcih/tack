@@ -9,15 +9,23 @@ const Parser = @import("Parser.zig");
 
 const CLI = @This();
 
+/// The program name used on the command line.
 name: []const u8,
+/// An optional description of the CLI.
 description: ?[]const u8 = null,
 
+/// Positional arguments accepted by the root CLI.
 arguments: []const Command.Argument = &.{},
+/// Options accepted by the root CLI.
 options: []const Command.Option = &.{},
+/// Commands available from the root CLI.
 commands: []const Command = &.{},
+/// An action that can intercept or control dispatch.
 action: ?Action = null,
+/// The final action run when dispatch is allowed to complete.
 final_action: ?FinalAction = null,
 
+/// Errors returned when a CLI definition is invalid.
 pub const ValidationError = error{
     RequiredArgumentAfterOptional,
     OptionHasNoName,
@@ -30,6 +38,7 @@ pub const ValidationError = error{
     RemainingArgumentNotLast,
 };
 
+/// Validates the CLI definition and its command tree.
 pub fn validate(self: *const CLI) ValidationError!void {
     try validate_node(
         self.arguments,
@@ -192,6 +201,7 @@ fn command_name_conflicts(first: Command, second: Command) bool {
     return false;
 }
 
+/// Validates, parses, and dispatches a command-line invocation.
 pub fn run(
     self: *const CLI,
     allocator: std.mem.Allocator,
@@ -205,6 +215,7 @@ pub fn run(
     try self.dispatch(&invocation);
 }
 
+/// Dispatches an already parsed invocation.
 pub fn dispatch(self: *const CLI, invocation: *const Invocation) !void {
     if (self.action) |action| {
         switch (try action(invocation)) {

@@ -6,6 +6,7 @@ const Invocation = @import("Invocation.zig");
 
 pub const Target = Invocation.Target;
 
+/// Errors that can occur while parsing an invocation.
 pub const Error = error{
     UnknownOption,
     MissingOptionValue,
@@ -14,6 +15,7 @@ pub const Error = error{
     MissingArgument,
 };
 
+/// Parses command-line arguments into an invocation.
 pub fn parse(
     allocator: std.mem.Allocator,
     cli: *const CLI,

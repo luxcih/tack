@@ -4,6 +4,7 @@ const CLI = @import("../CLI.zig");
 const Command = @import("../Command.zig");
 const Invocation = @import("../Invocation.zig");
 
+/// A persistent option that requests help for the current command.
 pub const option = Command.Option{
     .long = "help",
     .short = 'h',
@@ -11,6 +12,7 @@ pub const option = Command.Option{
     .description = "Show help for the current command.",
 };
 
+/// A command that renders help for a requested command path.
 pub const command = Command{
     .name = "help",
     .description = "Show help for a command.",
@@ -24,6 +26,7 @@ pub const command = Command{
     },
 };
 
+/// Intercepts help requests and renders the appropriate help output.
 pub fn action(invocation: *const Invocation) !Action.Result {
     if (invocation.has_option("help")) {
         try render_path(invocation.path);
@@ -55,10 +58,12 @@ pub fn action(invocation: *const Invocation) !Action.Result {
     return .continue_;
 }
 
+/// Renders help for an already parsed invocation.
 pub fn render(invocation: *const Invocation) !void {
     try render_path(invocation.path);
 }
 
+/// Resolves command names into a path starting at the root CLI.
 pub fn resolve(
     allocator: std.mem.Allocator,
     cli: *const CLI,
@@ -98,6 +103,7 @@ pub fn resolve(
     return path.toOwnedSlice(allocator);
 }
 
+/// Renders help for a CLI or command path.
 pub fn render_path(path: []const Invocation.Target) !void {
     const target = path[path.len - 1];
 
