@@ -7,3 +7,5 @@ pub const Parser = @import("Parser.zig");
 pub const Help = @import("Help.zig");
 pub const Behavior = @import("Behavior.zig");
 pub const Context = @import("Context.zig");
+
+pub const help_option = Help.option;

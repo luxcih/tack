@@ -3,6 +3,12 @@ const std = @import("std");
 const CLI = @import("CLI.zig");
 const Command = @import("Command.zig");
 
+pub const option = Command.Option{
+    .long = "help",
+    .short = 'h',
+    .description = "Show help.",
+};
+
 pub fn render(writer: anytype, cli: *const CLI) !void {
     try render_definition(
         writer,
