@@ -43,62 +43,24 @@ fn validate_node(
     options: []const Command.Option,
     persistent_options: []const Command.Option,
     commands: []const Command,
-    inherited_persistent: []const []const Command.Option,
+    inherited_options: []const Command.Option,
 ) ValidationError!void {
     try validate_arguments(arguments);
     try validate_options(options);
     try validate_options(persistent_options);
 
-    // Local and persistent options on this node share the same invocation scope.
-    for (options) |option| {
-        for (persistent_options) |persistent_option| {
-            if (options_conflict(option, persistent_option)) {
-                return error.DuplicateVisibleOption;
-            }
-        }
+    // Every option visible at this node must have a unique name.
+    try validate_visible_options(options, persistent_options);
+    try validate_visible_options(options, inherited_options);
+    try validate_visible_options(persistent_options, inherited_options);
 
-        for (inherited_persistent) |ancestor_options| {
-            for (ancestor_options) |ancestor_option| {
-                if (options_conflict(option, ancestor_option)) {
-                    return error.DuplicateVisibleOption;
-                }
-            }
-        }
-    }
-
-    // Persistent options remain visible throughout the entire subtree.
-    for (persistent_options) |option| {
-        for (inherited_persistent) |ancestor_options| {
-            for (ancestor_options) |ancestor_option| {
-                if (options_conflict(option, ancestor_option)) {
-                    return error.DuplicateVisibleOption;
-                }
-            }
-        }
-    }
-
-    var visible_persistent = std.ArrayList([]const Command.Option).empty;
-    defer visible_persistent.deinit(std.heap.page_allocator);
-
-    for (inherited_persistent) |ancestor_options| {
-        try visible_persistent.append(std.heap.page_allocator, ancestor_options);
-    }
-    try visible_persistent.append(std.heap.page_allocator, persistent_options);
-
-    try validate_commands(commands, visible_persistent.items);
-}
-
-fn validate_commands(
-    commands: []const Command,
-    inherited_persistent: []const []const Command.Option,
-) ValidationError!void {
     for (commands, 0..) |command, index| {
         try validate_node(
             command.arguments,
             command.options,
             command.persistent_options,
             command.commands,
-            inherited_persistent,
+            persistent_options,
         );
 
         for (commands[index + 1 ..]) |other| {
@@ -108,6 +70,19 @@ fn validate_commands(
 
             if (command_name_conflicts(command, other)) {
                 return error.DuplicateCommandName;
+            }
+        }
+    }
+}
+
+fn validate_visible_options(
+    first: []const Command.Option,
+    second: []const Command.Option,
+) ValidationError!void {
+    for (first) |option| {
+        for (second) |other| {
+            if (options_conflict(option, other)) {
+                return error.DuplicateVisibleOption;
             }
         }
     }
