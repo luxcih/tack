@@ -1,5 +1,3 @@
-const Action = @import("Action.zig");
-
 const Command = @This();
 
 name: []const u8,
@@ -12,8 +10,6 @@ options: []const Option = &.{},
 persistent_options: []const Option = &.{},
 commands: []const Command = &.{},
 
-action: ?Action = null,
-final_action: ?Action = null,
 
 pub const Argument = struct {
     name: []const u8,

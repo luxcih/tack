@@ -1,4 +1,5 @@
 pub const Action = @import("Action.zig").Action;
+pub const ActionResult = @import("Action.zig").Result;
 pub const CLI = @import("CLI.zig");
 pub const Command = @import("Command.zig");
 pub const Invocation = @import("Invocation.zig");

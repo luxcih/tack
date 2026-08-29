@@ -1,6 +1,7 @@
 const std = @import("std");
 
-const Action = @import("Action.zig");
+const Action = @import("Action.zig").Action;
+const ActionResult = @import("Action.zig").Result;
 const Command = @import("Command.zig");
 const Invocation = @import("Invocation.zig");
 const Parser = @import("Parser.zig");
@@ -189,77 +190,26 @@ pub fn run(
 }
 
 pub fn dispatch(self: *const CLI, invocation: *const Invocation) !void {
-    _ = self;
-
-    for (invocation.path) |target| {
-        if (target.action()) |action| {
-            try action(invocation);
+    if (self.action) |action| {
+        switch (try action(invocation)) {
+            .continue_ => {},
+            .stop => return,
         }
     }
 
-    if (invocation.target.final_action()) |action| {
-        try action(invocation);
+    if (self.final_action) |action| {
+        _ = try action(invocation);
     }
-}
-
-test "dispatches the target final action" {
-    const Test = struct {
-        var called = false;
-
-        fn action(invocation: *const Invocation) !void {
-            _ = invocation;
-            called = true;
-        }
-    };
-
-    Test.called = false;
-
-    const cli = CLI{
-        .name = "app",
-        .commands = &.{
-            .{
-                .name = "hello",
-                .final_action = Test.action,
-            },
-        },
-    };
-
-    var invocation = try Parser.parse(
-        std.testing.allocator,
-        &cli,
-        &.{"hello"},
-    );
-    defer invocation.deinit(std.testing.allocator);
-
-    try cli.dispatch(&invocation);
-    try std.testing.expect(Test.called);
-}
-
-test "does nothing when the target has no action" {
-    const cli = CLI{
-        .name = "app",
-        .commands = &.{
-            .{ .name = "group" },
-        },
-    };
-
-    var invocation = try Parser.parse(
-        std.testing.allocator,
-        &cli,
-        &.{"group"},
-    );
-    defer invocation.deinit(std.testing.allocator);
-
-    try cli.dispatch(&invocation);
 }
 
 test "run parses and dispatches" {
     const Test = struct {
         var called = false;
 
-        fn action(invocation: *const Invocation) !void {
+        fn action(invocation: *const Invocation) !ActionResult {
             _ = invocation;
             called = true;
+            return .continue_;
         }
     };
 
@@ -444,13 +394,15 @@ test "root action runs before root final action" {
         var action_called = false;
         var final_called = false;
 
-        fn action(_: *const Invocation) !void {
+        fn action(_: *const Invocation) !ActionResult {
             action_called = true;
+            return .continue_;
         }
 
-        fn final(_: *const Invocation) !void {
+        fn final(_: *const Invocation) !ActionResult {
             try std.testing.expect(action_called);
             final_called = true;
+            return .continue_;
         }
     };
 
@@ -524,4 +476,36 @@ test "allows unrelated local options in different command branches" {
     };
 
     try cli.validate();
+}
+
+
+test "stops dispatch when the action returns stop" {
+    const Test = struct {
+        var action_called = false;
+        var final_called = false;
+
+        fn action(_: *const Invocation) !ActionResult {
+            action_called = true;
+            return .stop;
+        }
+
+        fn final(_: *const Invocation) !ActionResult {
+            final_called = true;
+            return .continue_;
+        }
+    };
+
+    Test.action_called = false;
+    Test.final_called = false;
+
+    const cli = CLI{
+        .name = "app",
+        .action = Test.action,
+        .final_action = Test.final,
+    };
+
+    try cli.run(std.testing.allocator, &.{});
+
+    try std.testing.expect(Test.action_called);
+    try std.testing.expect(!Test.final_called);
 }
