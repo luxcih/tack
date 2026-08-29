@@ -14,6 +14,21 @@ pub fn render(writer: anytype, cli: *const CLI) !void {
     );
 }
 
+pub fn render_command(
+    writer: anytype,
+    name: []const u8,
+    command: *const Command,
+) !void {
+    try render_definition(
+        writer,
+        name,
+        command.description,
+        command.arguments,
+        command.options,
+        command.commands,
+    );
+}
+
 fn render_definition(
     writer: anytype,
     name: []const u8,
@@ -124,4 +139,25 @@ test "renders basic CLI help" {
     try std.testing.expect(std.mem.indexOf(u8, output, "Arguments:") != null);
     try std.testing.expect(std.mem.indexOf(u8, output, "Options:") != null);
     try std.testing.expect(std.mem.indexOf(u8, output, "Commands:") != null);
+}
+
+
+test "renders command help" {
+    const command = Command{
+        .name = "build",
+        .description = "Build the project.",
+        .options = &.{
+            .{ .long = "release", .short = 'r', .description = "Build in release mode." },
+        },
+    };
+
+    var buffer: [1024]u8 = undefined;
+    var stream = std.io.fixedBufferStream(&buffer);
+
+    try render_command(stream.writer(), "app build", &command);
+
+    const output = stream.getWritten();
+    try std.testing.expect(std.mem.indexOf(u8, output, "Usage: app build [OPTIONS]") != null);
+    try std.testing.expect(std.mem.indexOf(u8, output, "Build the project.") != null);
+    try std.testing.expect(std.mem.indexOf(u8, output, "-r, --release") != null);
 }
