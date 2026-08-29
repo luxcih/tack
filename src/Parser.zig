@@ -856,3 +856,92 @@ test "double dash prevents later command resolution" {
         invocation.arguments[0].value,
     );
 }
+
+
+test "parent command receives arguments when it is the final target" {
+    const cli = CLI{
+        .name = "app",
+        .commands = &.{
+            .{
+                .name = "remote",
+                .arguments = &.{.{ .name = "name" }},
+                .commands = &.{.{ .name = "add" }},
+            },
+        },
+    };
+
+    var invocation = try parse(
+        std.testing.allocator,
+        &cli,
+        &.{ "remote", "origin" },
+    );
+    defer invocation.deinit(std.testing.allocator);
+
+    switch (invocation.target) {
+        .command => |command| try std.testing.expectEqualStrings("remote", command.name),
+        .cli => return error.TestUnexpectedResult,
+    }
+
+    try std.testing.expectEqualStrings("origin", invocation.arguments[0].value);
+}
+
+test "final nested command receives positional arguments" {
+    const cli = CLI{
+        .name = "app",
+        .commands = &.{
+            .{
+                .name = "remote",
+                .arguments = &.{.{ .name = "name" }},
+                .commands = &.{
+                    .{
+                        .name = "add",
+                        .arguments = &.{
+                            .{ .name = "name" },
+                            .{ .name = "url" },
+                        },
+                    },
+                },
+            },
+        },
+    };
+
+    var invocation = try parse(
+        std.testing.allocator,
+        &cli,
+        &.{ "remote", "add", "origin", "https://example.com/repo" },
+    );
+    defer invocation.deinit(std.testing.allocator);
+
+    switch (invocation.target) {
+        .command => |command| try std.testing.expectEqualStrings("add", command.name),
+        .cli => return error.TestUnexpectedResult,
+    }
+
+    try std.testing.expectEqual(@as(usize, 2), invocation.arguments.len);
+    try std.testing.expectEqualStrings("origin", invocation.arguments[0].value);
+    try std.testing.expectEqualStrings("https://example.com/repo", invocation.arguments[1].value);
+}
+
+test "arguments stop command traversal" {
+    const cli = CLI{
+        .name = "app",
+        .commands = &.{
+            .{
+                .name = "remote",
+                .arguments = &.{.{ .name = "name" }},
+                .commands = &.{
+                    .{ .name = "add" },
+                },
+            },
+        },
+    };
+
+    try std.testing.expectError(
+        error.UnexpectedArgument,
+        parse(
+            std.testing.allocator,
+            &cli,
+            &.{ "remote", "origin", "add" },
+        ),
+    );
+}
