@@ -26,6 +26,7 @@ pub const ValidationError = error{
     DuplicateCommand,
     DuplicateCommandName,
     DuplicateVisibleOption,
+    RemainingArgumentNotLast,
 };
 
 pub fn validate(self: *const CLI) ValidationError!void {
@@ -112,7 +113,11 @@ fn validate_visible_options(
 fn validate_arguments(arguments: []const Command.Argument) ValidationError!void {
     var optional_seen = false;
 
-    for (arguments) |argument| {
+    for (arguments, 0..) |argument, index| {
+        if (argument.kind == .remaining and index + 1 != arguments.len) {
+            return error.RemainingArgumentNotLast;
+        }
+
         if (!argument.required) {
             optional_seen = true;
         } else if (optional_seen) {

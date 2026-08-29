@@ -138,12 +138,17 @@ pub fn parse(
 
         if (argument_index >= definitions.len) return error.UnexpectedArgument;
 
+        const definition = &definitions[argument_index];
+
         try parsed_arguments.append(allocator, .{
-            .definition = &definitions[argument_index],
+            .definition = definition,
             .value = arg,
         });
 
-        argument_index += 1;
+        if (definition.kind != .remaining) {
+            argument_index += 1;
+        }
+
         index += 1;
     }
 
@@ -912,4 +917,35 @@ test "arguments stop command traversal" {
             &.{ "remote", "origin", "add" },
         ),
     );
+}
+
+test "parses remaining arguments" {
+    const cli = CLI{
+        .name = "app",
+        .arguments = &.{.{ .name = "files", .kind = .remaining }},
+    };
+
+    var invocation = try parse(
+        std.testing.allocator,
+        &cli,
+        &.{ "a.txt", "b.txt", "c.txt" },
+    );
+    defer invocation.deinit(std.testing.allocator);
+
+    try std.testing.expectEqual(@as(usize, 3), invocation.arguments.len);
+    for (invocation.arguments) |argument| {
+        try std.testing.expectEqualStrings("files", argument.definition.name);
+    }
+}
+
+test "remaining argument must be last" {
+    const cli = CLI{
+        .name = "app",
+        .arguments = &.{
+            .{ .name = "files", .kind = .remaining },
+            .{ .name = "destination" },
+        },
+    };
+
+    try std.testing.expectError(error.RemainingArgumentNotLast, cli.validate());
 }
