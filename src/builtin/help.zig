@@ -26,18 +26,18 @@ pub const command = Command{
 
 pub fn action(invocation: *const Invocation) !Action.Result {
     if (invocation.has_option("help")) {
-        try render_path(invocation.getPath());
+        try render_path(invocation.get_path());
         return .stop;
     }
 
-    switch (invocation.getTarget()) {
+    switch (invocation.get_target()) {
         .command => |target| {
             if (std.mem.eql(u8, target.name, command.name)) {
                 const allocator = std.heap.page_allocator;
                 const names = try invocation.argument_values(allocator, "command");
                 defer allocator.free(names);
 
-                const root = switch (invocation.getPath()[0]) {
+                const root = switch (invocation.get_path()[0]) {
                     .cli => |cli| cli,
                     .command => unreachable,
                 };
@@ -56,7 +56,7 @@ pub fn action(invocation: *const Invocation) !Action.Result {
 }
 
 pub fn render(invocation: *const Invocation) !void {
-    try render_path(invocation.getPath());
+    try render_path(invocation.get_path());
 }
 
 pub fn resolve(
