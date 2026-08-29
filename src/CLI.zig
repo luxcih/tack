@@ -27,6 +27,7 @@ pub const ValidationError = error{
     DuplicateShortOption,
     DuplicateCommand,
     DuplicateCommandName,
+    DuplicateBehaviorOption,
 };
 
 pub fn validate(self: *const CLI) ValidationError!void {
@@ -35,6 +36,30 @@ pub fn validate(self: *const CLI) ValidationError!void {
         self.options,
         self.commands,
     );
+
+    for (self.behaviors) |behavior| {
+        try validate_options(behavior.options);
+
+        for (self.options) |option| {
+            for (behavior.options) |behavior_option| {
+                if (options_conflict(option, behavior_option)) {
+                    return error.DuplicateBehaviorOption;
+                }
+            }
+        }
+    }
+
+    for (self.behaviors, 0..) |behavior, index| {
+        for (self.behaviors[index + 1 ..]) |other| {
+            for (behavior.options) |option| {
+                for (other.options) |other_option| {
+                    if (options_conflict(option, other_option)) {
+                        return error.DuplicateBehaviorOption;
+                    }
+                }
+            }
+        }
+    }
 }
 
 fn validate_definition(
@@ -87,6 +112,25 @@ fn validate_options(options: []const Command.Option) ValidationError!void {
             }
         }
     }
+}
+
+fn options_conflict(
+    first: Command.Option,
+    second: Command.Option,
+) bool {
+    if (first.long) |long| {
+        if (second.long) |other_long| {
+            if (std.mem.eql(u8, long, other_long)) return true;
+        }
+    }
+
+    if (first.short) |short| {
+        if (second.short) |other_short| {
+            if (short == other_short) return true;
+        }
+    }
+
+    return false;
 }
 
 fn validate_commands(commands: []const Command) ValidationError!void {

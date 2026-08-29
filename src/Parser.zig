@@ -3,6 +3,7 @@ const std = @import("std");
 const CLI = @import("CLI.zig");
 const Command = @import("Command.zig");
 const Invocation = @import("Invocation.zig");
+const Behavior = @import("Behavior.zig");
 
 pub const Target = Invocation.Target;
 
@@ -34,7 +35,7 @@ pub fn parse(
     errdefer parsed_options.deinit(allocator);
 
     const definitions = target.arguments();
-    const options = target.options();
+
 
     var index = resolution.index;
     var argument_index: usize = 0;
@@ -55,7 +56,7 @@ pub fn parse(
             else
                 null;
 
-            const option = findLongOption(options, name) orelse return error.UnknownOption;
+            const option = findLongOption(cli, target, name) orelse return error.UnknownOption;
 
             switch (option.kind) {
                 .flag => {
@@ -93,7 +94,7 @@ pub fn parse(
 
             while (short_index < short_args.len) {
                 const short = short_args[short_index];
-                const option = findShortOption(options, short) orelse return error.UnknownOption;
+                const option = findShortOption(cli, target, short) orelse return error.UnknownOption;
 
                 switch (option.kind) {
                     .flag => {
@@ -193,14 +194,30 @@ fn findCommand(
 }
 
 fn findLongOption(
+    cli: *const CLI,
+    target: Invocation.Target,
+    name: []const u8,
+) ?*const Command.Option {
+    if (findLongOptionIn(target.options(), name)) |option| {
+        return option;
+    }
+
+    for (cli.behaviors) |*behavior| {
+        if (findLongOptionIn(behavior.options, name)) |option| {
+            return option;
+        }
+    }
+
+    return null;
+}
+
+fn findLongOptionIn(
     options: []const Command.Option,
     name: []const u8,
 ) ?*const Command.Option {
     for (options) |*option| {
         if (option.long) |long| {
-            if (std.mem.eql(u8, long, name)) {
-                return option;
-            }
+            if (std.mem.eql(u8, long, name)) return option;
         }
     }
 
@@ -208,14 +225,30 @@ fn findLongOption(
 }
 
 fn findShortOption(
+    cli: *const CLI,
+    target: Invocation.Target,
+    short: u8,
+) ?*const Command.Option {
+    if (findShortOptionIn(target.options(), short)) |option| {
+        return option;
+    }
+
+    for (cli.behaviors) |*behavior| {
+        if (findShortOptionIn(behavior.options, short)) |option| {
+            return option;
+        }
+    }
+
+    return null;
+}
+
+fn findShortOptionIn(
     options: []const Command.Option,
     short: u8,
 ) ?*const Command.Option {
     for (options) |*option| {
         if (option.short) |option_short| {
-            if (option_short == short) {
-                return option;
-            }
+            if (option_short == short) return option;
         }
     }
 
@@ -655,4 +688,31 @@ test "allows an attached value in a short option group" {
 
     try std.testing.expect(invocation.has_option("verbose"));
     try std.testing.expectEqualStrings("file.txt", invocation.option_value("output").?);
+}
+
+
+test "parses options contributed by behaviors" {
+    const noop = struct {
+        fn handle(_: *@import("Context.zig"), _: *const Invocation) !Behavior.Result {
+            return .proceed;
+        }
+    }.handle;
+
+    const cli = CLI{
+        .name = "app",
+        .commands = &.{.{ .name = "build" }},
+        .behaviors = &.{.{
+            .options = &.{.{ .long = "verbose", .short = 'v' }},
+            .handle = noop,
+        }},
+    };
+
+    var invocation = try parse(
+        std.testing.allocator,
+        &cli,
+        &.{ "build", "--verbose" },
+    );
+    defer invocation.deinit(std.testing.allocator);
+
+    try std.testing.expect(invocation.has_option("verbose"));
 }
