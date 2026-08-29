@@ -182,6 +182,7 @@ pub fn run(
 
     var context = Context{
         .allocator = allocator,
+        .cli = self,
     };
 
     if (try self.runBehaviors(&context, &invocation)) {
